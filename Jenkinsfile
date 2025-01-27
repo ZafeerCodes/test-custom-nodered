@@ -16,7 +16,7 @@ pipeline {
                 script {
                     withCredentials([string(credentialsId: 'github-zafeercodes', variable: 'GITHUB_TOKEN')]) {
                         sh """
-                            git clone https://zafeeruddin:${GITHUB_TOKEN}@github.com/masterworks-engineering/percepto-node-red
+                            git clone https://zafeeruddin:${GITHUB_TOKEN}@github.com/masterworks-engineering/test-custom-nodered
                             cd percepto-node-red                         """
                     }
                 }
