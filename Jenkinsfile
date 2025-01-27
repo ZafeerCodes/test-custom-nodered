@@ -1,3 +1,8 @@
+def DOCKER_USER_NAME = "zafeeruddin"
+def DOCKER_USER_PASSWORD = credentials("docker-hub-credentials")
+def KUBE_CONFIG = credentials("kubeconfig")
+
+
 pipeline {
     agent any
 
@@ -15,7 +20,7 @@ pipeline {
         stage("Checkout") {
             steps {
                 script {
-                    withCredentials([string(credentialsId: 'github-zafeercodes', variable: 'GITHUB_TOKEN')]) {
+                    withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
                         echo "Token got is ........${GITHUB_TOKEN}"
                         
                         sh """
