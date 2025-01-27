@@ -16,7 +16,7 @@ pipeline {
             steps {
                 script {
                     withCredentials([string(credentialsId: 'github-zafeercodes', variable: 'GITHUB_TOKEN')]) {
-                        echo "Token got is ........${GIHUB_TOKEN}"
+                        echo "Token got is ........${GITHUB_TOKEN}"
                         
                         sh """
                             git clone https://zafeeruddin:${GITHUB_TOKEN}@github.com/ZafeerCodes/test-custom-nodered
