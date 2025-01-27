@@ -8,6 +8,7 @@ pipeline {
         REPO_URL = "https://github.com/masterworks-engineering/k8s-percepto.git"  
         IMAGE_NAME = "zafeeruddin/custom-node-red"  
         IMAGE_TAG = "${IMAGE_NAME}:${env.BUILD_NUMBER}"  
+        GITHUB_TOKEN = credentials("github-zafeercodes")
     }
 
     stages {
