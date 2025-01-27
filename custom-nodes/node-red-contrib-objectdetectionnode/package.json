@@ -1,0 +1,20 @@
+{
+    "name": "node-red-contrib-objectdetectionnode",
+    "version": "0.0.1",
+    "description": "Object Detection Node for specific use case.",
+    "dependencies": {
+        "python-integration-helper": "file:../../packages/local_modules/python-integration-helper"
+    },
+    "keywords": [
+        "node-red",
+        "object",
+        "object-detection",
+        "object detect",
+        "object detection v2 beta"
+    ],
+    "node-red": {
+        "nodes": {
+            "sample": "objectDetectionNode/objectDetectionNode.js"
+        }
+    }
+}

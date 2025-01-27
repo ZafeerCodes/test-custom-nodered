@@ -1,0 +1,19 @@
+{
+  "name": "node-red-contrib-azurellmnode",
+  "version": "0.0.1",
+  "description": "The node that can be useful for access Azure OpenAI and Cognitive Search Services to analyse and generate response from documents",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "web-socket-server": "file:../../packages/local_modules/web-socket-server"
+  },
+  "keywords": [
+    "node-red",
+    "azure",
+    "azure-llm"
+  ],
+  "node-red": {
+    "nodes": {
+      "sample": "azureLLM/azureLLM.js"
+    }
+  }
+}

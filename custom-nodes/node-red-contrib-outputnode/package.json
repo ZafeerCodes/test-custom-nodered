@@ -1,0 +1,19 @@
+{
+    "name": "node-red-contrib-outputnode",
+    "version": "0.0.1",
+    "description": "The simplest of simple nodes",
+    "dependencies": {
+        "dotenv": "^16.4.5",
+        "express": "^4.19.2",
+        "ws": "^8.18.0",
+        "web-socket-server": "file:../../packages/local_modules/web-socket-server"
+    },
+    "keywords": [
+        "node-red"
+    ],
+    "node-red": {
+        "nodes": {
+            "sample": "outputNode/outputNode.js"
+        }
+    }
+}

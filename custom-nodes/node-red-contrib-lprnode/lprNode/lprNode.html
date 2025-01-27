@@ -1,0 +1,120 @@
+<script type="text/javascript">
+  RED.nodes.registerType("lpr", {
+    category: "custom",
+    color: "#cbcbcb",
+    defaults: {
+      name: { value: "LPR" },
+      model: { value: "SFANET" },
+      fontColor: { value: "#FFFFFF" },
+      fontScale: { value: "1" },
+      fontThickness: { value: "2" },
+      threshold: {
+        value: 0.25,
+      },
+      boundingBoxColor: {
+        value: "#00FF00",
+      },
+      labelColor: {
+        value: "#00FF00",
+      },
+      fontSize: {
+        value: 25,
+      },
+      outputProperties: {
+        value: [
+          {
+            key: "plates",
+            type: "array_str",
+          },
+          {
+            key: "annotatedBuffer",
+            type: "buffer",
+          },
+        ],
+      },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "font-awesome/fa-object-ungroup",
+    inputLabels: function () {
+      var lab = "";
+      var props = null;
+      if (!Array.isArray(props)) {
+        props = [
+          { p: "threshold", v: this.threshold, vt: "number" },
+          { p: "boundingBoxColor", v: this.boundingBoxColor, vt: "str" },
+
+          { p: "labelColor", v: this.labelColor, vt: "str" },
+          { p: "fontSize", v: this.fontSize, vt: "number" },
+        ];
+      }
+      if (props) {
+        for (var i = 0, l = props.length; i < l; i++) {
+          if (i > 0) lab += "\n";
+          if (i === 5) {
+            lab += "... +" + (props.length - 5);
+            break;
+          }
+          lab += props[i].p + ": ";
+
+          var propType =
+            props[i].p === "payload" ? this.payloadType : props[i].vt;
+          if (propType === "json") {
+            try {
+              var parsedProp = JSON.parse(
+                props[i].p === "payload" ? this.payload : props[i].v
+              );
+              propType = typeof parsedProp;
+              if (propType === "object" && Array.isArray(parsedProp)) {
+                propType = "Array";
+              }
+            } catch (e) {
+              propType = "invalid";
+            }
+          }
+          lab += propType;
+        }
+      }
+      return lab;
+    },
+
+    outputLabels: function () {
+      return "Output: Annotated Frame Buffer";
+    },
+    label: function () {
+      return this.name || "LPR";
+    },
+  });
+</script>
+
+<script type="text/html" data-template-name="lpr">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name" />
+  </div>
+
+  <div class="form-row">
+    <label for="node-input-boundingBoxColor"> Bounding box color: </label>
+    <input
+      id="node-input-boundingBoxColor"
+      data-i18n="boundingBoxColor"
+      type="color"
+    />
+  </div>
+
+  <div class="form-row">
+    <label for="node-input-labelColor"> Label color: </label>
+    <input id="node-input-labelColor" data-i18n="labelColor" type="color" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-fontSize"> Label font size: </label>
+    <input id="node-input-fontSize" data-i18n="fontSize" type="text" />
+  </div>
+</script>
+
+<script type="text/html" data-help-name="lpr">
+  <p>
+    This node will take input data as a frame buffer and performs Licence Plate
+    Recognition, giving output as an annotated frame buffer.
+  </p>
+</script>

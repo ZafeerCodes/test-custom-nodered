@@ -1,0 +1,10 @@
+torch
+facenet-pytorch
+tensorflow==2.8.1
+retina-face
+qdrant-client
+ultralytics
+protobuf==3.20.3
+requests==2.28.1
+urllib3==1.26.15
+chardet==3.0.4

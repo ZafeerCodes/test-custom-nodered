@@ -1,0 +1,164 @@
+  <!-- Node-red: postgre database configs[start]  -->
+  <script type="text/html" data-template-name="postgreDatabaseConfigs">
+	<div class="form-row">
+		<label for="node-config-input-name">
+			<span data-i18n="name">Connection name</span>
+		</label>
+		<input type="text" id="node-config-input-name" data-i18n="Name" placeholder="Name" />
+	</div>
+	<div class="form-row">
+		<ul style="background: #fff; min-width: 600px; margin-bottom: 20px;" id="postgresql-config-tabs"></ul>
+	</div>
+	<div id="postgresql-config-tabs-content" style="min-height: 170px;">
+		<div id="postgresql-config-tab-connection" style="display: none;">
+			<div class="form-row">
+				<label for="node-config-input-host">
+					<i class="fa fa-server"></i>
+					<span data-i18n="host">Host</span>
+				</label>
+				<input type="text" id="node-config-input-host" data-i18n="Host" style="width: 80%;" placeholder="Host"/>
+			</div>
+			<div class="form-row">
+					<label for="node-config-input-port">
+						<span data-i18n="Port">Port</span>
+					</label>
+					<input type="number" id="node-config-input-port" data-i18n="Port" style="width: 80%;" placeholder="Port" />
+				</div>
+			<div class="form-row">
+				<label for="node-config-input-database">
+					<i class="fa fa-database"></i>
+					<span data-i18n="Database">Database</span>
+				</label>
+				<input type="text" id="node-config-input-database" data-i18n="Database" style="width: 80%;" placeholder="Database" />
+			</div>
+			<div class="form-row">
+				<label for="node-config-input-ssl" style="width: auto;margin-right: 72px;">
+					<span data-i18n="ssl">SSL</span>
+				</label>
+				<input type="text" id="node-config-input-ssl" style="display: inline-block; width: auto; vertical-align: top;" />
+			</div>
+		</div>
+		<div id="postgresql-config-tab-security" style="display: none;">
+			<div class="form-row">
+				<label for="node-config-input-username">
+					<i class="fa fa-user"></i>
+					<span data-i18n="dbUser">User</span>
+				</label>
+				<input type="text" id="node-config-input-username" data-i18n="User" style="width: 80%;" placeholder="dbUser" />
+			</div>
+			<div class="form-row">
+				<label for="node-config-input-password">
+					<i class="fa fa-lock"></i>
+					<span data-i18n="dbPassword">Password</span>
+				</label>
+				<input type="password" id="node-config-input-password" data-i18n="Password" placeholder="dbPassword" style="width: 80%;" />
+			</div>
+		</div>
+		<div id="postgresql-config-tab-pool" style="display: none;">
+			<div class="form-row">
+				<label data-i18n="ApplicationName" for="node-config-input-applicationName">
+					<i class="fa fa-tag"></i>
+					<span data-i18n="ApplicationName">Application Name</span>
+				</label>
+				<input type="text" id="node-config-input-applicationName" data-i18n="applicationName" style="width: 80%;" placeholder="Application Name"/>
+			</div>
+			<div class="form-row">
+				<label data-i18n="Max" for="node-config-input-max" style="width: 150px;">
+					<i class="fa fa-thermometer-full"></i>
+					<span data-i18n="Max">Maximum size</span>
+				</label>
+				<input type="text" id="node-config-input-max" data-i18n="Max" style="width: 60%;" placeholder="Maximum size" />
+			</div>
+			<div class="form-row">
+				<label for="node-config-input-idle" style="width: 150px;">
+					<i class="fa fa-hourglass-half"></i>
+					<span data-i18n="Idle"> Idle Timeout </span>
+				</label>
+				<input type="text" id="node-config-input-idle" data-i18n="Idle" style="width: 60%;" placeholder="Idle Timeout" />
+			</div>
+			<div class="form-row">
+				<label for="node-config-input-connectionTimeout" style="width: 150px;">
+					<i class="fa fa-hourglass-half"></i>
+					<span data-i18n="ConnectionTimeout" >Connection Timeout</span>
+				</label>
+				<input type="text" id="node-config-input-connectionTimeout" data-i18n="ConnectionTimeout" style="width: 60%;" placeholder="Connection Timeout" />
+			</div>
+		</div>
+	</div>
+</script>
+
+  <script type="text/javascript">
+    /* global RED:false, $:false */
+    RED.nodes.registerType('postgreDatabaseConfigs', {
+      category: 'config',
+      defaults: {
+        name: {
+          value: '',
+        },
+        host: {
+          value: '127.0.0.1',
+        },
+        port: {
+          value: 5432,
+        },
+        database: {
+          value: 'postgres',
+        },
+        ssl: {
+          value: false,
+        },
+        applicationName: {
+          value: '',
+        },
+        max: {
+          value: 10,
+        },
+        idle: {
+          value: 1000,
+        },
+        connectionTimeout: {
+          value: 10000,
+        },
+        username: {
+          value: '',
+        },
+        password: {
+          value: '',
+        },
+      },
+      label: function () {
+        var version = "[v" + "1.x" + "] ";
+        return this.name ? version + this.name : version + this.host + ":" + this.port + "/" + this.database;
+      },
+      labelStyle: function () {
+        return this.name ? 'node_label_italic' : '';
+      },
+      oneditprepare: function () {
+        const tabs = RED.tabs.create({
+          id: 'postgresql-config-tabs',
+          onchange: function (tab) {
+            $('#postgresql-config-tabs-content').children().hide();
+            $('#' + tab.id).show();
+          },
+        });
+        tabs.addTab({
+          id: 'postgresql-config-tab-connection',
+          label: this._('Connection'),
+        });
+        tabs.addTab({
+          id: 'postgresql-config-tab-security',
+          label: this._('Security'),
+        });
+        tabs.addTab({
+          id: 'postgresql-config-tab-pool',
+          label: this._('Pool'),
+        });
+        $('#node-config-input-ssl').typedInput({
+          default: 'bool',
+          types: ['bool'],
+          typeField: $('#node-config-input-sslFieldType'),
+        });
+      },
+    });
+  </script>
+  <!-- Node-red: postgre database configs[end]  -->

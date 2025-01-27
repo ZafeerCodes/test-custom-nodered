@@ -1,0 +1,6 @@
+numpy
+opencv-python
+ultralytics
+facenet-pytorch
+retinaface
+Pillow

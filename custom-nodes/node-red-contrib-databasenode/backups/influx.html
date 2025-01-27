@@ -1,0 +1,16 @@
+<div>
+    <h4>InfluxDB Section</h4>
+    <p>This is content loaded from influx.html</p>
+</div>
+<script>
+    // Add variables and functions to the shared global object
+    window.shared.influxVar = "Influx Variable";
+    window.shared.influxFunction = function (args) {
+        
+        console.log("Function from Influx HTML", args);
+    };
+
+    // Access variables and functions from the main HTML
+    console.log("Accessing from influx.html:", window.shared.mainVar); // Main Variable
+    window.shared.mainFunction("Mark-one"); // Calls the function from main HTML
+</script>

@@ -1,0 +1,32 @@
+{
+  "name": "node-red-contrib-databasenode",
+  "version": "0.0.1",
+  "description": "The simplest of simple nodes",
+  "dependencies": {
+    "@influxdata/influxdb-client": "^1.35.0",
+    "dotenv": "^16.4.5",
+    "influx": "^5.9.3",
+    "jsonata": "^2.0.6",
+    "lodash": "^4.17.21",
+    "pg": "^8.13.1",
+    "uuid": "^11.0.3"
+  },
+  "keywords": [
+    "node-red",
+    "database",
+    "db"
+  ],
+  "node-red": {
+    "nodes": {
+      "sample": "databaseNode/databaseNode.js",
+      "influxDatabaseViewTableConfigs": "databaseNode/components/influxDatabaseViewTableConfigs.js",
+      "influxBucketCreationConfigs": "databaseNode/components/influxBucketCreationConfigs.js",
+      "influxMeasurementCreationConfigs": "databaseNode/components/influxMeasurementCreationConfigs.js",
+      "influxDatabaseConfigs": "databaseNode/components/influxDatabaseConfigs.js",
+      "pgDatabaseCreationConfigs": "databaseNode/components/pgDatabaseCreationConfigs.js",
+      "pgDatabaseTableCreationConfigs": "databaseNode/components/pgDatabaseTableCreationConfigs.js",
+      "postgreDatabaseConfigs": "databaseNode/components/postgreDatabaseConfigs.js",
+      "pgDatabaseViewTableConfigs": "databaseNode/components/pgDatabaseViewTableConfigs.js"
+    }
+  }
+}

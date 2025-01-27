@@ -1,0 +1,400 @@
+<!-- Node-red: Table Creation(PG) configs[start]  -->
+<script type="text/html" data-template-name="pgDatabaseTableCreationConfigs">
+    <style>
+    </style>
+    <!-- <div class="form-row" style="min-width: 500px;">
+      <label for="node-config-input-name"><i class="fa fa-tag"></i> Name </label>
+      <input type="text" id="node-config-input-name" data-i18n="Name" placeholder="Name">
+    </div> -->
+  
+    <div class="form-row" style="min-width: 500px; display: flex;">
+      <label for="node-config-input-tableName"><i class="fa fa-table"></i> Table Name</label>
+      <div style="position: relative; width: 70%; margin-left: 3px;">
+        <input type="text" id="node-config-input-tableName" placeholder="Table name" autocomplete="off" style="padding-right: 30px; width: 100%;">
+        <i class="fa fa-caret-down" style="position: absolute; right: 8px; top: 10px; color: #888;"></i>
+      </div>
+    </div>
+    <div class="form-row" id="node-input-add-column-container">
+      <label><i class="fa fa-columns"></i> Columns </label>
+      <button id="node-input-add-column" class="red-ui-button">Add Column</button>
+    </div>
+    <div class="form-row" id="node-input-columns-container">
+    </div>
+  </script>
+
+<script type="text/javascript">
+    (function () {
+        var API_URI = `http://${window.location.hostname}:4500`;
+        var auth_token = localStorage.getItem("percepto-user");
+        var INFLUX_URI = `http://${window.location.hostname}:8086`;
+
+
+        let isCreateNewTable = false;
+        let isTableEditable = false;
+
+        let configs = {};
+
+        function getTableDetails(type, payload, configs) {
+            if (type === "postgreDb") {
+                const pgUrl = `${API_URI}/postgresql/query`;
+
+                return new Promise((resolve, reject) => {
+                    $.ajax({
+                        url: pgUrl,
+                        method: 'POST',
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": "Bearer " + auth_token,
+                        },
+                        data: JSON.stringify({
+                            ...payload
+                        }),
+                        success: function (data) {
+                            resolve(data);
+                        },
+                        error: function (error) {
+                            console.error('Failed to fetch data:', error);
+                            reject(error);
+                        }
+                    });
+                });
+            }
+        }
+        function createTablesFromDatabase(payload) {
+            const pgUrl = `${API_URI}/postgresql/create-table`;
+
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    url: pgUrl,
+                    method: 'POST',
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + auth_token,
+                    },
+                    data: JSON.stringify({
+                        ...payload
+                    }),
+                    success: function (data) {
+                        resolve(data);
+                    },
+                    error: function (error) {
+                        console.error('Failed to fetch data:', error);
+                        reject(error);
+                    }
+                });
+            });
+        }
+        function getTableLists(payload) {
+            const pgUrl = `${API_URI}/postgresql/tables`;
+
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    url: pgUrl,
+                    method: 'POST',
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + auth_token,
+                    },
+                    data: JSON.stringify({
+                        ...payload
+                    }),
+                    success: function (data) {
+                        resolve(data);
+                    },
+                    error: function (error) {
+                        console.error('Failed to fetch data:', error);
+                        reject(error);
+                    }
+                });
+            });
+        }
+
+        async function createColumnRow(column = {}, tableLists, columnsContainer, configs) {
+            const availableTables = tableLists;
+
+            const columnRowContainer = $('<div>', { style: 'display: flex; gap: 10px; margin: 10px;' });
+            const columnRow = $('<div>', { class: 'node-table-column-row', style: 'display: flex; flex-direction: column; gap: 10px; width: 90%; border: 1px gray dashed; padding: 5px;' });
+
+            const columnName = $('<div>').append(
+                $('<label>', { text: 'Column Name' }),
+                $('<input>', {
+                    type: 'text',
+                    class: 'node-input-column-name',
+                    value: column.name || "",
+                    required: true,
+                })
+            );
+
+            const columnType = $('<div>').append(
+                $('<label>', { text: 'Type' }),
+                $('<select>', { class: 'node-input-column-type' }).append(
+                    '<option value="VARCHAR">VARCHAR</option>',
+                    '<option value="INT">INT</option>',
+                    '<option value="BOOLEAN">BOOLEAN</option>'
+                ).val(column.type || "VARCHAR")
+            );
+
+            const isPrimary = $('<div>', { style: 'flex:1; display: flex; flex-direction: row; justify-content: flex-start; align-items: flex-start; width: 100%;' }).append(
+                $('<input>', {
+                    type: 'checkbox',
+                    class: 'node-input-column-primary',
+                    checked: column.isPrimary || false,
+                    style: 'margin-right: 5px; width: unset!important;'
+                }),
+                $('<label>', { text: 'Primary Key', style: 'display: block;' })
+            );
+
+            const isForeign = $('<div>', { style: 'flex: 1; display: flex; flex-direction: row; justify-content: flex-start; align-items: flex-start; width: 100%;' }).append(
+                $('<input>', {
+                    type: 'checkbox',
+                    class: 'node-input-column-foreign',
+                    checked: column.isForeign || false,
+                    style: 'margin-right: 5px; width: unset!important;'
+                }),
+                $('<label>', { text: 'Foreign Key', style: 'display: block;' })
+            );
+            const refTable = $('<div>').append(
+                $('<label>', { text: 'References Table' }),
+                $('<select>', {
+                    class: 'node-input-column-ref-table',
+                    disabled: !column.isForeign,
+                    change: function () {
+                        const selectedTable = $(this).val();
+                        populateRefColumnOptions(selectedTable);
+                    }
+                }).append(
+                    $('<option>', { value: "", text: "Select a table" }),
+                    availableTables?.map(table => $('<option>', { value: table, text: table }))
+                )
+            );
+
+            const refColumn = $('<div>').append(
+                $('<label>', { text: 'References Column' }),
+                $('<select>', {
+                    class: 'node-input-column-ref-column',
+                    disabled: !column.isForeign
+                }).append(
+                    $('<option>', { value: "", text: "Select a column" })
+                )
+            );
+            async function populateRefColumnOptions(selectedTable) {
+                try {
+                    const refColumnSelect = refColumn.find('select.node-input-column-ref-column');
+                    refColumnSelect.empty().append($('<option>', { value: "", text: "Select a column" }));
+                    const payload = {
+                        query: `SELECT column_name, data_type, character_maximum_length, is_nullable 
+                        FROM information_schema.columns 
+                        WHERE table_schema = 'public' AND table_name = $1`,
+                        configs: configs,
+                        params: [selectedTable]
+                    };
+                    const columnsByTable = (await getTableDetails("postgreDb", payload) || []).map(el => el.column_name);
+
+                    if (columnsByTable) {
+                        columnsByTable.forEach(column => {
+                            refColumnSelect.append($('<option>', { value: column, text: column }));
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error populating reference column options:', error);
+                }
+            }
+            if (column.referencesTable) {
+                refTable.find('select.node-input-column-ref-table').val(column.referencesTable);
+                populateRefColumnOptions(column.referencesTable);
+                refColumn.find('select.node-input-column-ref-column').val(column.referencesColumn);
+            }
+
+            const deleteButton = $('<button>', {
+                type: 'button',
+                class: 'red-ui-button red-ui-button-small node-input-delete-column',
+                text: 'Remove'
+            }).on('click', function () {
+                columnRowContainer.remove();
+            });
+
+            isForeign.find('input').on('change', function () {
+                const isChecked = $(this).is(':checked');
+                refTable.find('select').prop('disabled', !isChecked);
+                refColumn.find('select').prop('disabled', !isChecked);
+            });
+
+            columnRow?.append(columnName, columnType, isPrimary, isForeign, refTable, refColumn, deleteButton);
+            columnRowContainer?.append(columnRow);
+            columnsContainer?.append(columnRowContainer);
+        }
+
+        RED.nodes.registerType('pgDatabaseTableCreationConfigs', {
+            category: 'config',
+            color: '#a6bbcf',
+            defaults: {
+                name: { value: "" },
+                tableName: { value: "", required: false },
+                columns: { value: [] },
+            },
+            inputs: 1,
+            outputs: 1,
+            icon: "table.png",
+            label: function () {
+                return this.name || this.tableName;
+            },
+            oneditprepare: async function () {
+                const configNode = RED.nodes.getType("pgDatabaseTableCreationConfigs");
+                const dbConfigs = configNode?.defaults?.dbConfigs;
+
+                if (!dbConfigs) {
+                    RED.notify("Missing configs!", "error");
+                } else if (!dbConfigs.database) {
+                    RED.notify("Missing database!", "error");
+                }
+                configs = dbConfigs || {};
+
+                let tableLists = await getTableLists(configs) || [];
+                const columnsContainer = $('#node-input-columns-container');
+
+                const addColumnButtonContaner = $("#node-input-add-column-container").hide();
+
+                if (isTableEditable) {
+                    addColumnButtonContaner.show();
+                    columnsContainer.show();
+                    updateColumn(this.tableName)
+                }
+
+                async function updateColumn(selectedTable) {
+                    const payload = {
+                        query: `SELECT column_name, data_type, is_nullable 
+                  FROM information_schema.columns 
+                  WHERE table_schema = 'public' AND table_name = $1`,
+                        configs: configs,
+                        params: [selectedTable]
+                    };
+
+                    try {
+                        const fetchedTableInfo = await getTableDetails("postgreDb", payload);
+                        const columnsToUse = fetchedTableInfo && fetchedTableInfo.length > 0
+                            ? fetchedTableInfo?.map(column => ({
+                                name: column.column_name,
+                                type: column.data_type,
+                                isPrimary: false,
+                                isForeign: false,
+                                referencesTable: '',
+                                referencesColumn: '',
+                                isNullable: column.is_nullable === 'YES'
+                            }))
+                            : this.columns || [];
+
+                        columnsContainer.empty();
+                        columnsToUse.forEach((el) => createColumnRow(el, tableLists, columnsContainer, configs));
+
+                    } catch (error) {
+                        console.error("Error fetching table details:", error);
+                    }
+                }
+
+                $('#node-input-add-column').on('click', function () {
+                    createColumnRow({}, tableLists, columnsContainer, configs);
+                });
+
+                $("#node-config-input-tableName").autocomplete({
+                    source: function (request, response) {
+                        let matches = [];
+                        const searchTerm = request.term.toLowerCase();
+
+                        tableLists.forEach(v => {
+                            const i = v.toLowerCase().indexOf(searchTerm);
+                            if (i > -1) {
+                                matches.push({
+                                    value: v,
+                                    label: v,
+                                    i: i
+                                });
+                            }
+                        });
+
+                        if (matches.length === 0) {
+                            matches.push({
+                                value: `${request.term}`,
+                                label: `Add new "${request.term}"`,
+                                isCreateOption: true
+                            });
+                        }
+
+                        matches.sort((A, B) => A.i - B.i);
+
+                        response(matches);
+                    },
+                    minLength: 1,
+                    select: async function (event, ui) {
+                        const item = ui.item;
+
+                        if (item.isCreateOption) {
+                            const newTable = item.value.replace('Create "', '').replace('"', '');
+                            tableLists.push(newTable);
+                            $("#node-config-input-tableName").val(newTable);
+                            addColumnButtonContaner.show();
+                            updateColumn(newTable)
+                            isCreateNewTable = true;
+                            isTableEditable = true;
+
+                        } else {
+                            $("#node-config-input-tableName").val(item.value);
+                            addColumnButtonContaner.hide();
+                            // updateColumn(item.value)
+                            isCreateNewTable = false;
+                            isTableEditable = false;
+                        }
+                    },
+                    focus: function (event, ui) {
+                        return false;
+                    },
+                    open: function () {
+                        $(this).autocomplete("widget").css({
+                            "max-height": "200px",
+                            "overflow-y": "auto"
+                        });
+                    }
+                });
+                $("#node-config-input-tableName").on("focus", function () {
+                    $(this).autocomplete("search", "");
+                });
+
+
+            },
+            oneditsave: async function () {
+                const tableName = $('#node-config-new-tableName').is(':visible') ?
+                    $('#node-config-new-tableName').val() : $('#node-config-input-tableName').val();
+
+                const columns = [];
+                $('.node-table-column-row').each(function () {
+                    columns.push({
+                        name: $(this).find('.node-input-column-name').val(),
+                        type: $(this).find('.node-input-column-type').val(),
+                        isPrimary: $(this).find('.node-input-column-primary').is(':checked'),
+                        isForeign: $(this).find('.node-input-column-foreign').is(':checked'),
+                        referencesTable: $(this).find('.node-input-column-ref-table').val(),
+                        referencesColumn: $(this).find('.node-input-column-ref-column').val()
+                    });
+                });
+
+                const payload = {
+                    tableName: tableName,
+                    columns: columns,
+                    configs: configs
+                };
+                console.log(isCreateNewTable, "isCreateNewTable")
+
+                if (isCreateNewTable) {
+                    await createTablesFromDatabase(payload).then((res) => {
+                        RED.notify(`${res}`, "success");
+                    }).catch((err) => {
+                        RED.notify(`${err.statusText}`, "error");
+                    });
+                }
+                isCreateNewTable = false;
+                isTableEditable = false;
+
+            }
+        });
+    })();
+</script>
+<!-- Node-red: Table Creation(PG) configs[end]  -->

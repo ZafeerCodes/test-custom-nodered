@@ -1,0 +1,337 @@
+<!-- Node-red: Influx measurement creation [start] -->
+<script type="text/html" data-template-name="influxMeasurementCreationConfigs">
+    <style>
+      .form-row {
+        margin-bottom: 10px;
+      }
+      .form-row label {
+        display: block;
+        margin-bottom: 5px;
+      }
+      .columns-container {
+        margin-top: 10px;
+      }
+      .column-row {
+        display: flex;
+        gap: 10px;
+        margin: 5px 0;
+        border: 1px dashed gray;
+        padding: 5px;
+      }
+      .remove-btn {
+        margin-left: auto;
+      }
+    </style>
+  
+    <!-- <div class="form-row">
+      <label for="node-config-input-name">Name</label>
+      <input type="text" id="node-config-input-name" placeholder="Name">
+    </div> -->
+    <div class="container-config-node-influx-measurement">
+      <div class="form-row" style="min-width: 500px; display: flex;">
+        <label for="node-config-input-measurementName">Measurement Name</label>
+        <div style="position: relative; width: 70%; margin-left: 3px;">
+          <input type="text" id="node-config-input-measurementName" placeholder="Measurement Name" autocomplete="off" style="padding-right: 30px; width: 100%;">
+          <i class="fa fa-caret-down" style="position: absolute; right: 8px; top: 10px; color: #888;"></i>
+        </div>
+      </div>
+      <!-- <div class="form-row node-input-add-column-container">
+        <label for="node-input-add-column">Keys</label>
+        <button id="node-input-add-column" class="red-ui-button">Add Key</button>
+      </div>
+      <div id="node-input-columns-container" class="columns-container"></div> -->
+    </div>
+  </script>
+
+<script type="text/javascript">
+  (function () {
+    var API_URI = `http://${window.location.hostname}:4500`;
+    var auth_token = localStorage.getItem("percepto-user");
+    var INFLUX_URI = `http://${window.location.hostname}:8086`;
+
+    let newMeasurement = false;
+    let configs = {};
+
+    function createMeasurment(payload, params) {
+      console.log(payload, params, "paramsparams")
+      const influxUrl = `${params.url || INFLUX_URI}/api/v2`;
+      const { measurementName, keys } = payload;
+      function constructLineProtocol(measurementName, keys) {
+        const tags = keys
+          .filter(key => key.type === 'tag')
+          .map(tag => `${tag.name}=${tag.value}`)
+          .join(',');
+
+        const fields = keys
+          .filter(key => key.type === 'field')
+          .map(field => {
+            const value = (typeof field.value === 'number') ? field.value : `"${field.value}"`;
+            return `${field.name}=${value}`;
+          })
+          .join(',');
+
+        const timestamp = Date.now() * 1000000;
+        return `${measurementName},${tags} ${fields} ${timestamp}`;
+      }
+      console.log(constructLineProtocol(measurementName, keys), "constructLineProtocol(measurementName, keys)")
+      return new Promise((resolve, reject) => {
+        $.ajax({
+          url: `${influxUrl}/query?org=${params.org}`,
+          method: 'POST',
+          headers: {
+            'Authorization': `Token ${params.token}`,
+            'Content-Type': 'application/vnd.flux',
+          },
+          data: `
+              from(bucket: "${params.bucket}")
+                |> range(start: -1h)
+                |> filter(fn: (r) => r._measurement == "${measurementName}")
+                |> limit(n: 1)
+            `,
+          success: function (queryResponse) {
+            const exists = queryResponse.results && queryResponse.results.length > 0;
+            const lineProtocol = constructLineProtocol(measurementName, keys);
+
+            $.ajax({
+              url: `${influxUrl}/write?org=${params.org}&bucket=${params.bucket}&precision=ns`,
+              method: 'POST',
+              headers: {
+                'Authorization': `Token ${params.token}`,
+                'Content-Type': 'text/plain',
+              },
+              data: lineProtocol,
+              success: function () {
+                console.log(`Measurement ${exists ? 'updated' : 'created'} successfully!`);
+                resolve(`Measurement ${exists ? 'updated' : 'created'} successfully`);
+              },
+              error: function (writeError) {
+                console.error(`Error ${exists ? 'updating' : 'creating'} measurement:`, writeError);
+                reject(`Error ${exists ? 'updating' : 'creating'} measurement: ${writeError.statusText}`);
+              },
+            });
+          },
+          error: function (queryError) {
+            console.error('Error querying existing measurements:', queryError);
+            reject(`Error querying existing measurements: ${queryError.statusText}`);
+          },
+        });
+      });
+    }
+    function getMeasurmentLists(params) {
+      const influxUrl = `${params.url || INFLUX_URI}/api/v2/query?orgID=${params.org}`;
+
+      const query = `
+          import "influxdata/influxdb/schema"
+          schema.measurements(bucket: "${params.bucket}")
+        `;
+
+      return new Promise((resolve, reject) => {
+        $.ajax({
+          url: influxUrl,
+          method: 'POST',
+          headers: {
+            'Authorization': `Token ${params.token}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/vnd.flux'
+          },
+          data: query,
+          success: function (data) {
+            const lines = data.trim().split('\n');
+            const headers = lines[0].split(',');
+
+            const result = lines.slice(1).map(line => {
+              const values = line.split(',');
+              const entry = {};
+
+              headers.forEach((header, index) => {
+                entry[header.trim()] = values[index].trim();
+              });
+
+              return entry;
+            });
+
+            resolve(result);
+          },
+          error: function (error) {
+            console.error('Failed to fetch data:', error);
+            reject(error);
+          }
+        });
+      });
+    }
+    function createInfluxColumnRow(container, column = {}) {
+      const columnRow = $('<div>', { class: 'form-row column-row' });
+      const keyName = $('<input>', {
+        type: 'text',
+        class: 'red-ui-input node-input-key-name',
+        placeholder: 'Key name',
+        value: column.name || '',
+      });
+      const keyType = $('<select>', { class: 'node-input-key-type' }).append(
+        $('<option>', { value: 'tag', text: 'Tag' }),
+        $('<option>', { value: 'field', text: 'Field' })
+      ).val(column.type || 'tag');
+      const valueType = $('<select>', { class: 'node-input-value-type' }).append(
+        $('<option>', { value: 'num', text: 'NUM' }),
+        $('<option>', { value: 'char', text: 'CHAR' })
+      ).val(column.valueType || 'num');
+      // if (column.type !== 'field') {
+      //   valueType.hide();
+      // }
+      keyType.on('change', function () {
+        if ($(this).val() === 'field') {
+          valueType.show();
+          keyName.prop('disabled', false);
+        } else if ($(this).val() === 'tag') {
+          valueType.show();
+          keyName.prop('disabled', true).val('char');
+          valueType.prop('disabled', true).val('char');
+        }
+      });
+      const removeButton = $('<button>', {
+        type: 'button',
+        class: 'red-ui-button red-ui-button-small remove-btn',
+      }).append(
+        $('<i>', { class: 'fa fa-close' })
+      ).on('click', () => columnRow.remove());
+
+      columnRow.append(keyName, keyType, valueType, removeButton);
+      container.append(columnRow);
+    }
+    RED.nodes.registerType('influxMeasurementCreationConfigs', {
+      category: 'config',
+      color: '#f5b041',
+      defaults: {
+        name: { value: '' },
+        measurementName: { value: '' },
+        keys: { value: [] },
+      },
+      inputs: 0,
+      outputs: 0,
+      icon: 'database.png',
+      label: function () {
+        return this.name || this.measurementName || "";
+      },
+      oneditprepare: async function () {
+        const configNode = RED.nodes.getType("influxMeasurementCreationConfigs");
+        const dbConfigs = configNode?.defaults?.dbConfigs;
+        if (!dbConfigs) {
+          RED.notify("Missing configs!", "error");
+          return;
+        }
+        if (!dbConfigs.bucket) {
+          RED.notify("Missing bucket!", "error");
+          return;
+        }
+
+        configs = dbConfigs || {};
+        const columnsContainer = $('#node-input-columns-container').hide();
+        const addColumnButtonContainer = $(".node-input-add-column-container").hide();
+
+        if (configs.isMeasurementCreation) {
+          addColumnButtonContainer.show();
+          columnsContainer.show();
+        }
+
+        const measurementLists = (await getMeasurmentLists(configs))?.map(res => res._value) || [];
+
+        $("#node-config-input-measurementName").autocomplete({
+          source: function (request, response) {
+            const searchTerm = request.term.toLowerCase();
+            const matches = measurementLists
+              .filter(v => v.toLowerCase().includes(searchTerm))
+              .map(v => ({ value: v, label: v }));
+
+            if (!matches.length) {
+              matches.push({
+                value: request.term,
+                label: `Create "${request.term}"`,
+                isCreateOption: true,
+              });
+            }
+
+            response(matches);
+          },
+          minLength: 1,
+          select: function (event, ui) {
+            const item = ui.item;
+
+            if (item.isCreateOption) {
+              const newMeasurementName = item.value.replace('Create "', '').replace('"', '');
+              measurementLists.push(newMeasurementName);
+              $("#node-config-input-measurementName").val(newMeasurementName);
+              newMeasurement = true;
+              addColumnButtonContainer.show();
+              columnsContainer.show();
+            } else {
+              $("#node-config-input-measurementName").val(item.value);
+              newMeasurement = false;
+              addColumnButtonContainer.hide();
+              columnsContainer.hide();
+            }
+          },
+          focus: function () {
+            return false;
+          },
+          open: function () {
+            $(this).autocomplete("widget").css({
+              "max-height": "200px",
+              "overflow-y": "auto"
+            });
+          }
+        });
+
+        $("#node-config-input-measurementName").on("focus", function () {
+          $(this).autocomplete("search", "");
+        });
+
+        $('#node-input-add-column').on('click', () => {
+          createInfluxColumnRow(columnsContainer);
+        });
+
+        (this.keys || []).forEach(key => {
+          createInfluxColumnRow(columnsContainer, key);
+        });
+      },
+      oneditsave: async function () {
+        const measurementName = $('#node-config-input-measurementName').val().trim();
+        this.measurementName = measurementName;
+        // const keys = [];
+
+        // $('.column-row').each(function () {
+        //   const name = $(this).find('.node-input-key-name').val().trim();
+        //   const type = $(this).find('.node-input-key-type').val().trim();
+        //   const valueType = $(this).find('.node-input-value-type').val().trim();
+
+        //   if (name && type) {
+        //     if (valueType === "num") {
+        //       keys.push({ name, type, value: Math.random() });
+        //     } else {
+        //       keys.push({ name, type, value: `default` });
+        //     }
+        //   }
+        // });
+
+        // if (!measurementName) {
+        //   RED.notify("Measurement Name cannot be empty!", "error");
+        //   return false;
+        // }
+
+        // this.measurementName = measurementName;
+        // this.keys = keys;
+
+        // const payload = { measurementName, keys };
+
+        // if (newMeasurement) {
+        //   try {
+        //     await createMeasurment(payload, configs);
+        //     RED.notify("Measurement created successfully!", "success");
+        //   } catch (err) {
+        //     RED.notify("Error creating measurement: " + (err?.message || "Unknown Error"), "error");
+        //   }
+        // }
+      },
+    });
+  })();
+</script>
+<!-- Node-red: Influx measurement creation [end] -->

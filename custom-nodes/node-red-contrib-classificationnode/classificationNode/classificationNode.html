@@ -1,0 +1,137 @@
+<script type="text/javascript">
+  RED.nodes.registerType('classification', {
+    category: 'custom',
+    color: "#cbcbcb",
+    defaults: {
+      name: { value: "Classification Node" },
+      threshold: { value: "0.5" },
+      boundingBoxColor: { value: "#00FF00" },
+      labelColor: { value: "#00FF00" },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "file.png",
+    label: function () {
+      return this.name || "classification";
+    },
+    inputLabels: function () {
+      var lab = "";
+      var props = null;
+      if (!Array.isArray(props)) {
+        props = [
+          { p: "frameBuffer", v: this.imagePath, vt: "string" },
+          { p: "boxes", v: this.imagePath, vt: "int[][]" },
+          { p: "annotatedBuffer", v: this.imagePath, vt: "string" },
+          
+        ];
+      }
+      if (props) {
+        for (var i = 0, l = props.length; i < l; i++) {
+          if (i > 0) lab += "\n";
+          if (i === 5) {
+            lab += "... +" + (props.length - 5);
+            break;
+          }
+          lab += props[i].p + ": ";
+
+          var propType = props[i].p === "payload" ? this.payloadType : props[i].vt;
+          if (propType === "json") {
+            try {
+              var parsedProp = JSON.parse(
+                props[i].p === "payload" ? this.payload : props[i].v
+              );
+              propType = typeof parsedProp;
+              if (propType === "object" && Array.isArray(parsedProp)) {
+                propType = "Array";
+              }
+            } catch (e) {
+              propType = "invalid";
+            }
+          }
+          lab += propType
+        }
+      }
+      return lab;
+    },
+    outputLabels: function () {
+      var lab = "";
+      var props = null;
+      if (!Array.isArray(props)) {
+        props = [
+          { p: "annotatedBuffer", v: this.objectDetails, vt: "string" },
+        ];
+      }
+      if (props) {
+        for (var i = 0, l = props.length; i < l; i++) {
+          if (i > 0) lab += "\n";
+          if (i === 5) {
+            lab += "... +" + (props.length - 5);
+            break;
+          }
+          lab += props[i].p + ": ";
+
+          var propType = props[i].p === "payload" ? this.payloadType : props[i].vt;
+          if (propType === "json") {
+            try {
+              var parsedProp = JSON.parse(
+                props[i].p === "payload" ? this.payload : props[i].v
+              );
+              propType = typeof parsedProp;
+              if (propType === "object" && Array.isArray(parsedProp)) {
+                propType = "Array";
+              }
+            } catch (e) {
+              propType = "invalid";
+            }
+          }
+          lab += propType
+        }
+      }
+      console.log(typeof lab, "chekc");
+      return lab;
+    },
+  });
+</script>
+
+<script type="text/html" data-template-name="classification">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-boundingBoxColor">Bounding box color:</label>
+        <input type="color" id="node-input-boundingBoxColor" />
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-labelColor">Label color:</label>
+        <input type="color" id="node-input-labelColor"/>
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-threshold">Threshold:</label>
+        <input type="number" id="node-input-threshold" placeholder="0.5" value="0.25" step="0.01" min="0" max="1" />
+    </div>
+
+  
+    <div class="form-row">
+      <label for="node-input-classificationModel">Classification</label>
+      <select id="node-input-classificationModel">
+          <option value="emotion">Emotion</option>
+      </select>
+  </div>
+
+  <div class="form-row">
+      <label for="node-input-emotionModel"> Emotion Model</label>
+      <select id="node-input-emotionModel">
+          <option value="face_emotion_cnn">Face Emotion CNN Model</option>
+      </select>
+  </div>
+    </div>
+    
+    
+    
+
+   
+</script>

@@ -1,0 +1,6 @@
+# Requirements for YOLOv8 Heatmap Processing Script
+ultralytics
+supervision
+torch
+opencv-python
+numpy

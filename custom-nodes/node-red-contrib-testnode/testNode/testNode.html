@@ -1,0 +1,96 @@
+<script type="text/javascript">
+  RED.nodes.registerType("input(test)", {
+    category: "custom",
+    color: "#cbcbcb",
+    defaults: {
+      name: { value: "input(test)" },
+      text: { value: "" },
+      outputProperties: {
+        value: [
+          {
+            key: "arrstr",
+            type: "array_str"
+          },
+          {
+            key: "arrnum",
+            type: "array_num"
+          },
+          {
+            key: "isgood",
+            type: "boolean"
+          },
+          {
+            key: "name",
+            type: "str"
+          },
+          {
+            key: "price",
+            type: "num"
+          },
+          {
+            key: "arrobj",
+            type: "array_obj",
+            subKeys: [
+              {
+                key: "id",
+                type: "num"
+              },
+              {
+                key: "name",
+                type: "str"
+              },
+              {
+                key: "age",
+                type: "num"
+              },
+              {
+                key: "isDropped",
+                type: "boolean"
+              },
+            ]
+          },
+          {
+            key: "objects",
+            type: "object",
+            subKeys: [
+              {
+                key: "noderedId",
+                type: "num"
+              },
+              {
+                key: "nodeLabel",
+                type: "str"
+              },
+              {
+                key: "isGood",
+                type: "boolean"
+              },
+            ]
+          },
+        ]
+      }
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "font-awesome/fa-text-width",
+    label: function () {
+      return this.name || "input(test)";
+    },
+  });
+</script>
+
+<script type="text/html" data-help-name="input(test)">
+  <p>The simplest of all Nodes to implement as an introductory example.<br/></p>
+</script>
+
+<script type="text/html" data-template-name="input(test)">
+    <div class="form-row">
+      <label for="node-input-name"><i class="fa fa-tag"></i> Name </label>
+      <input type="text" id="node-input-name" data-i18n="Name" placeholder="Name">
+  </div>
+
+    <div class="form-row">
+        <label for="node-input-text"><i class="icon-tag"></i> Topic: </label>
+        <input type="text" id="node-input-text" placeholder="Enter Sample Text">
+    </div>
+</script>

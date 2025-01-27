@@ -1,0 +1,119 @@
+<!-- VideoViewNode.html -->
+<script
+  type="text/javascript"
+  src="https://cdn.jsdelivr.net/npm/hls.js@latest"
+></script>
+<script type="text/javascript">
+  RED.nodes.registerType("video view", {
+    category: "custom",
+    color: "#cbcbcb",
+    defaults: {
+      name: { value: "video view" },
+    },
+    inputs: 1,
+    // outputs: 1,
+    icon: "debug.svg",
+    inputLabels: function () {
+      var lab = "";
+      var props = null;
+      if (!Array.isArray(props)) {
+        props = [
+          { p: "annotatedBuffer", v: this.annotatedBuffer, vt: "buffer" },
+        ];
+      }
+      if (props) {
+        for (var i = 0, l = props.length; i < l; i++) {
+          if (i > 0) lab += "\n";
+          if (i === 5) {
+            lab += "... +" + (props.length - 5);
+            break;
+          }
+          lab += props[i].p + ": ";
+
+          var propType = props[i].p === "payload" ? this.payloadType : props[i].vt;
+          if (propType === "json") {
+            try {
+              var parsedProp = JSON.parse(
+                props[i].p === "payload" ? this.payload : props[i].v
+              );
+              propType = typeof parsedProp;
+              if (propType === "object" && Array.isArray(parsedProp)) {
+                propType = "Array";
+              }
+            } catch (e) {
+              propType = "invalid";
+            }
+          }
+          lab += propType
+        }
+      }
+      return lab;
+    },
+    label: function () {
+      return this.name || "video view";
+    },
+    oneditprepare: function () {
+      var $loader = $(".video-view-video-loader");
+      var $notFound = $(".video-view-video-not-found");
+
+      $notFound.hide();
+      $loader.show();
+
+      const location = window.location;
+
+      const API_URI = `http://${location.hostname}:4500`;
+
+      const RED_API_URI = `http://${location.hostname}:1880`;
+
+      const NGINX_API_URI = `http://${location.hostname}:3077`;
+
+      $.ajax({
+        type: "GET",
+        url: `${NGINX_API_URI}`,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        success: function (data) {
+          if (data) {
+            $loader.hide();
+            $("#video-view-video-cont").html(data);
+          } else {
+            handleNotFound();
+          }
+        },
+        error: function (xhr, status, error) {
+          console.error(xhr, status, error);
+          handleNotFound();
+        },
+      });
+
+      function handleNotFound() {
+        $loader.hide();
+        $notFound.show();
+      }
+    },
+  });
+</script>
+
+<script type="text/x-red" data-help-name="video view">
+  <p>This node takes individual video frames, converts them into a continuous video stream, and displays the result. It is useful for visualizing frame-by-frame data as a video playback within the Node-RED interface.</p>
+</script>
+
+<script type="text/x-red" data-template-name="video view">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name </label>
+    <input type="text" id="node-input-name" data-i18n="Name" placeholder="Name">
+  </div>
+
+  <div class="video-view-video-loader">
+    <p style="text-align: center; font-size: 16px; padding: 5px;"> Loading... </p>
+  </div>
+
+  <div class="video-view-video-not-found">
+    <p style="text-align: center; font-size: 16px; padding: 5px;">No contents found</p>
+  </div>
+
+  <div class="form-row" id="video-view-video-cont" style="width: 450px">
+    <!-- This is where the video content will be injected -->
+  </div>
+</script>

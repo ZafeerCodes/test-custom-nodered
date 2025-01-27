@@ -1,0 +1,79 @@
+<script type="text/html" data-template-name="face-detection">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Face Detection Node">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-boundingBoxColor">Bounding box color:</label>
+        <input type="color" id="node-input-boundingBoxColor" value="#00FF00"/>
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-threshold">Detection Threshold:</label>
+        <input type="number" 
+               id="node-input-threshold" 
+               placeholder="0.5" 
+               min="0" 
+               max="1" 
+               step="0.1" 
+               value="0.5"/>
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-model">Face Detection Model:</label>
+        <select id="node-input-model" style="width: 70%; min-width: 70%; max-width: 70%;">
+            <option value="yolo" selected>YOLOv8 Face</option>
+            <option value="mtcnn">MTCNN</option>
+            <option value="retinaface">RetinaFace</option>
+        </select>
+    </div>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('face-detection', {
+        category: 'custom',
+        color: "#cbcbcb",
+        defaults: {
+            name: { value: "Face Detection Node" },
+            boundingBoxColor: { value: "#00FF00" },
+            threshold: { value: "0.5", validate: RED.validators.number() },
+            model: { value: "yolo" }
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: "file.png",
+        label: function () {
+            return this.name || "face-detection";
+        },
+        inputLabels: function () {
+            var lab = "";
+            var props = [
+                { p: "frameBuffer", v: this.imagePath, vt: "Buffer" }
+            ];
+            
+            if (props) {
+                for (var i = 0; i < props.length; i++) {
+                    if (i > 0) lab += "\n";
+                    lab += props[i].p + ": " + props[i].vt;
+                }
+            }
+            return lab;
+        },
+        outputLabels: function () {
+            var lab = "";
+            var props = [
+                { p: "annotatedBuffer", v: this.imagePath, vt: "Buffer" },
+                { p: "coordinates", v: this.coordinates, vt: "int[][]" }
+            ];
+            
+            if (props) {
+                for (var i = 0; i < props.length; i++) {
+                    if (i > 0) lab += "\n";
+                    lab += props[i].p + ": " + props[i].vt;
+                }
+            }
+            return lab;
+        }
+    });
+</script>

@@ -1,0 +1,1022 @@
+<script
+  type="text/javascript"
+  src="resources/node-red-contrib-objectcountnode/objCountYoloClasses.js"
+></script>
+<script type="text/javascript">
+  (function () {
+    const location = window.location;
+    const API_URI = `http://${location.hostname}:4500`;
+    const RED_API_URI = `http://${location.hostname}:1880`;
+    const NGINX_API_URI = `http://${location.hostname}:3077`;
+    const tokenString = localStorage.getItem("percepto-user");
+    const organizationId = localStorage.getItem("organizationId");
+
+    var uniqueId = () => {
+      return Math.random().toString(36).substr(2, 9);
+    };
+
+    function isMouseNearLine(mouseX, mouseY, start, end, tolerance = 5) {
+      const A = mouseX - start.x;
+      const B = mouseY - start.y;
+      const C = end.x - start.x;
+      const D = end.y - start.y;
+
+      const dot = A * C + B * D;
+      const lenSq = C * C + D * D;
+      const param = lenSq !== 0 ? dot / lenSq : -1;
+
+      let nearestX, nearestY;
+
+      if (param < 0) {
+        nearestX = start.x;
+        nearestY = start.y;
+      } else if (param > 1) {
+        nearestX = end.x;
+        nearestY = end.y;
+      } else {
+        nearestX = start.x + param * C;
+        nearestY = start.y + param * D;
+      }
+
+      const dist = Math.sqrt(
+        (mouseX - nearestX) ** 2 + (mouseY - nearestY) ** 2
+      );
+      return dist <= tolerance;
+    }
+
+    var fetchInterval;
+    RED.nodes.registerType("object counting", {
+      category: "custom",
+      color: "#cbcbcb",
+      defaults: {
+        name: { value: "object counting" },
+        selectedFile: { value: "" },
+        selectedDataColl: { value: "" },
+        shapeSelector: { value: "line" },
+        nodeRois: { value: [] },
+        multiselectObjects: { value: "" },
+        boundingBoxColor: {
+          value: "#00FF00",
+        },
+        labelColor: {
+          value: "#00FF00",
+        },
+        fontSize: {
+          value: "25",
+        },
+        lineColor: {
+          value: "#00FF00",
+        },
+        rois: {
+          value: [],
+        },
+        inputType: {
+          value: "data-collection",
+        },
+        scaleX: {
+          value: "",
+        },
+        scaleY: {
+          value: "",
+        },
+        outputProperties: {
+          value: [
+            {
+              key: "rois",
+              type: "array_obj",
+            },
+            {
+              key: "detectedObjects",
+              type: "array_obj",
+            },
+            {
+              key: "results",
+              type: "array_obj",
+            },
+          ],
+        },
+      },
+      inputs: 1,
+      outputs: 1,
+      icon: "font-awesome/fa-arrows-v",
+      inputLabels: function () {
+        var lab = "";
+        var props = null;
+        if (!Array.isArray(props)) {
+          props = [
+            { p: "imageUrl", v: this.imageUrl, vt: "str" },
+            { p: "frameBuffer", v: this.frameBuffer, vt: "buffer" },
+          ];
+        }
+        if (props) {
+          for (var i = 0, l = props.length; i < l; i++) {
+            if (i > 0) lab += "\n";
+            if (i === 5) {
+              lab += "... +" + (props.length - 5);
+              break;
+            }
+            lab += props[i].p + ": ";
+
+            var propType =
+              props[i].p === "payload" ? this.payloadType : props[i].vt;
+            if (propType === "json") {
+              try {
+                var parsedProp = JSON.parse(
+                  props[i].p === "payload" ? this.payload : props[i].v
+                );
+                propType = typeof parsedProp;
+                if (propType === "object" && Array.isArray(parsedProp)) {
+                  propType = "Array";
+                }
+              } catch (e) {
+                propType = "invalid";
+              }
+            }
+            lab += propType;
+          }
+        }
+        return lab;
+      },
+      outputLabels: function () {
+        var lab = "";
+        var props = null;
+        if (!Array.isArray(props)) {
+          props = [{ p: "rois", v: this.rois, vt: "array" }];
+        }
+        if (props) {
+          for (var i = 0, l = props.length; i < l; i++) {
+            if (i > 0) lab += "\n";
+            if (i === 5) {
+              lab += "... +" + (props.length - 5);
+              break;
+            }
+            lab += props[i].p + ": ";
+
+            var propType =
+              props[i].p === "payload" ? this.payloadType : props[i].vt;
+            if (propType === "json") {
+              try {
+                var parsedProp = JSON.parse(
+                  props[i].p === "payload" ? this.payload : props[i].v
+                );
+                propType = typeof parsedProp;
+                if (propType === "object" && Array.isArray(parsedProp)) {
+                  propType = "Array";
+                }
+              } catch (e) {
+                propType = "invalid";
+              }
+            }
+            lab += propType;
+          }
+        }
+
+        return lab;
+      },
+      label: function () {
+        return this.name || "ROI";
+      },
+      oneditsave: function () {
+        var node = this;
+
+        var newValues = {
+          inputType: $("#node-input-inputType").val() || "",
+          selectedDataColl: $("#node-input-selectedDataColl").val() || "",
+          selectedFile: $("#node-input-selectedFile").val() || "",
+          shapeSelector: $("#node-input-shapeSelector").val() || "",
+          rois: node.nodeRois,
+        };
+
+        var hasChanged =
+          newValues.inputType !== node.inputType ||
+          newValues.selectedDataColl !== node.selectedDataColl ||
+          newValues.selectedFile !== node.selectedFile ||
+          newValues.shapeSelector !== node.shapeSelector ||
+          JSON.stringify(newValues.rois) !== JSON.stringify(node.rois);
+
+        if (hasChanged) {
+          Object.assign(node, newValues);
+          RED.nodes.node(node.id).changed = true;
+          RED.nodes.dirty(true);
+        }
+
+        // node.nodeRois = [];
+        clearInterval(fetchInterval);
+      },
+      oneditcancel: function () {
+        clearInterval(fetchInterval);
+      },
+      oneditdelete: function () {
+        clearInterval(fetchInterval);
+      },
+      oneditprepare: function () {
+        var node = this;
+
+        const $inputType = $("#node-input-inputType");
+        const $canvasSection = $("#rois-feed-canvas-section");
+        const $objects = $("object-detection-objects");
+
+        $("#node-input-multiselectObjects").typedInput({
+          types: [
+            {
+              value: "objects",
+              multiple: "true",
+              options: objCountYoloClasses.map((item) => {
+                return { value: item, label: item };
+              }),
+            },
+          ],
+        });
+        $("#node-input-multiselectObjects").on("change", function () {
+          var selectedValues = $(this).val();
+          if (!selectedValues || selectedValues.length === 0) {
+            // No items selected, set the label to "All"
+            $(this)
+              .siblings(".red-ui-typedInput-container")
+              .find(".red-ui-typedInput-option-label")
+              .text("All");
+          }
+        });
+
+        $("#rois-feed-selectedFile, #rois-feed-canvas-section").hide();
+
+        $("#node-input-inputType").val(node.inputType || "");
+        $("#node-input-selectedDataColl").val(node.selectedDataColl || "");
+        $("#node-input-selectedFile").val(node.selectedFile || "");
+        $("#node-input-shapeSelector").val(node.shapeSelector || "");
+        node.nodeRois = [...node.rois];
+
+        let $shapeSelector = $("#node-input-shapeSelector");
+        const $canvas = $("#rois-feed-canvas");
+        const ctx = $canvas[0].getContext("2d");
+        const $errorMessage = $("#rois-feed-error-message");
+        const $clearBtn = $("#rois-feed-clear-button");
+        const $backBtn = $("#rois-feed-back-button");
+        var $loader = $(".rois-feed-loader");
+        var $notFound = $(".rois-feed-not-found");
+        const $lineConfigMain = $(".cont-form-line-config-main");
+        $errorMessage.hide();
+        $lineConfigMain.hide();
+
+        let image = new Image();
+        let rois = [];
+        let currentRoi = [];
+        let isDragging = false;
+        let dragIndex = -1;
+        let offsetX, offsetY;
+        $notFound.hide();
+        $loader.show();
+
+        const rasterImageFormats = [
+          "jpg",
+          "jpeg",
+          "png",
+          "gif",
+          "bmp",
+          "tiff",
+          "tif",
+          "webp",
+          "heic",
+          "cr2",
+          "nef",
+          "arw",
+          "psd",
+        ];
+
+        function fetchNodeData() {
+          $.ajax({
+            url: `${RED_API_URI}/api/objectcountnode/data/${node.id}`,
+            method: "GET",
+            success: function (data) {
+              if (data?.data) {
+                $loader.hide();
+                $notFound.hide();
+                if (data.data.frameBuffer) {
+                  const byteArray = new Uint8Array(
+                    data?.data?.frameBuffer?.data
+                  );
+                  const blob = new Blob([byteArray], { type: "image/png" });
+                  const url = URL.createObjectURL(blob);
+                  updateImageOnCanvas(url);
+                }
+              } else {
+                handleNotFound();
+              }
+            },
+            error: function () {
+              handleNotFound();
+            },
+          });
+        }
+
+        function handleNotFound() {
+          $loader.hide();
+          $notFound.show();
+        }
+
+        function updateFileInput(colId) {
+          $.ajax({
+            type: "GET",
+            url: `${API_URI}/file/getAllFilesByCollectionId?id=${colId}`,
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: "Bearer " + tokenString,
+            },
+            success: function (data) {
+              const $select = $("#node-input-selectedFile");
+
+              data = data.map((el) => ({
+                ...el,
+                path:
+                  `${NGINX_API_URI}/percepto/content/` +
+                  "serve" +
+                  el.path?.split("serve")?.[1],
+              }));
+
+              $select.empty();
+
+              if (data?.length) {
+                $("#rois-feed-selectedFile").show();
+                if (node.selectedFile) {
+                  $canvasSection.show();
+                }
+
+                const selectedFileLabel =
+                  data.find((cl) => cl.path === node.selectedFile)?.fileName ||
+                  "Select a file";
+
+                $select.append(
+                  `<option value="${node.selectedFile}">${selectedFileLabel}</option>`
+                );
+
+                const finalData = data.filter((el) => {
+                  const extension = el.path.split(".").pop().toLowerCase();
+                  return rasterImageFormats.includes(extension);
+                });
+
+                finalData?.forEach((cl) => {
+                  if (cl.path !== node.selectedFile) {
+                    $select.append(
+                      `<option value="${cl.path}">${cl.fileName}</option>`
+                    );
+                  }
+                });
+
+                $select.on("change", function () {
+                  $select.val($(this).val());
+                  updateImageOnCanvas(this.value);
+                  $canvasSection.show();
+                  $errorMessage.hide();
+                });
+              } else {
+                $("#rois-feed-selectedFile").hide();
+                $canvasSection.hide();
+              }
+            },
+            error: function (xhr, status, error) {
+              console.error(xhr, status, error);
+              $("#rois-feed-selectedFile").hide();
+              $canvasSection.hide();
+            },
+          });
+        }
+
+        function updateDataCollectionInput() {
+          $.ajax({
+            type: "GET",
+            url: `${API_URI}/warehouse/get-data-collections/?organizationId=${organizationId}`,
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: "Bearer " + tokenString,
+            },
+            success: function (data) {
+              const $dataCollInput = $("#node-input-selectedDataColl");
+
+              $dataCollInput.empty();
+
+              if (data.data?.length) {
+                const selectedLabel =
+                  data?.data?.find((cl) => cl.id === node.selectedDataColl)
+                    ?.name || "Select a data collection";
+
+                $dataCollInput.append(
+                  `<option value="${node.selectedDataColl}">${selectedLabel}</option>`
+                );
+
+                data?.data?.forEach((cl) => {
+                  if (cl.id !== node.selectedDataColl) {
+                    $dataCollInput.append(
+                      `<option value="${cl.id}">${cl.name}</option>`
+                    );
+                  }
+                });
+
+                $dataCollInput.on("change", function () {
+                  $canvasSection.hide();
+                  $dataCollInput.val($(this).val());
+                  updateFileInput(this.value);
+                });
+              } else {
+                // $canvasSection.hide();
+              }
+            },
+            error: function (xhr, status, error) {
+              $("#rois-feed-selectedFile").hide();
+              $canvasSection.hide();
+            },
+          });
+        }
+
+        function updateImageOnCanvas(imageUrl) {
+          $canvasSection.show();
+          const maxWidth = 450;
+          const maxHeight = 300;
+
+          let scaleX = 1;
+          let scaleY = 1;
+
+          image.onload = () => {
+            let width = image.width;
+            let height = image.height;
+
+            if (width > maxWidth || height > maxHeight) {
+              if (width / height > maxWidth / maxHeight) {
+                scaleX = maxWidth / width;
+                scaleY = scaleX;
+                height = height * scaleX;
+                width = maxWidth;
+              } else {
+                scaleY = maxHeight / height;
+                scaleX = scaleY;
+                width = width * scaleY;
+                height = maxHeight;
+              }
+            }
+
+            $canvas[0].width = width;
+            $canvas[0].height = height;
+            ctx.drawImage(image, 0, 0, width, height);
+
+            node.scaleX = scaleX;
+            node.scaleY = scaleY;
+
+            drawROIs();
+          };
+
+          image.onerror = () => {
+            $errorMessage.show();
+            // $canvasSection.hide();
+          };
+
+          image.src = imageUrl || "";
+        }
+
+        $shapeSelector.on("change", function (event) {
+          $shapeSelector.val($(this).val());
+          currentRoi = [];
+        });
+
+        $canvas.on("mousedown", (e) => {
+          const rect = $canvas[0].getBoundingClientRect();
+
+          const x = (e.clientX - rect.left) / node.scaleX;
+          const y = (e.clientY - rect.top) / node.scaleY;
+
+          if ($shapeSelector.val() === "line") {
+            currentRoi.push({ x, y });
+            if (currentRoi.length === 2) {
+              node.nodeRois.push({
+                id: uniqueId(),
+                name: `Line-${node?.nodeRois?.length + 1 || 1}`,
+                upArrow: true,
+                downArrow: true,
+                type: "line",
+                coords: [...currentRoi],
+              });
+              drawROIs();
+              currentRoi = [];
+            } else {
+              if (currentRoi.length > 1) {
+                const lastPoint = currentRoi[currentRoi.length - 2];
+                ctx.beginPath();
+                ctx.moveTo(
+                  lastPoint.x * node.scaleX,
+                  lastPoint.y * node.scaleY
+                );
+                ctx.lineTo(x * node.scaleX, y * node.scaleY);
+                ctx.strokeStyle = "#1efc4e";
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.closePath();
+              }
+              drawPointer(x * node.scaleX, y * node.scaleY);
+            }
+          }
+        });
+        $canvas.on("mouseup", () => {
+          isDragging = false;
+          dragIndex = -1;
+        });
+
+        function drawROIs() {
+          ctx.clearRect(0, 0, $canvas[0].width, $canvas[0].height);
+          ctx.drawImage(image, 0, 0, $canvas[0].width, $canvas[0].height);
+
+          node?.nodeRois?.forEach((roi, index) => {
+            if (roi.type === "line") {
+              const [start, end] = roi.coords;
+
+              const scaledStart = {
+                x: start.x * node.scaleX,
+                y: start.y * node.scaleY,
+              };
+              const scaledEnd = {
+                x: end.x * node.scaleX,
+                y: end.y * node.scaleY,
+              };
+
+              const dx = scaledEnd.x - scaledStart.x;
+              const dy = scaledEnd.y - scaledStart.y;
+              const angle = Math.atan2(dy, dx);
+              const midX = (scaledStart.x + scaledEnd.x) / 2;
+              const midY = (scaledStart.y + scaledEnd.y) / 2;
+
+              const isHovered = roi.hovered || false;
+
+              ctx.beginPath();
+              ctx.moveTo(scaledStart.x, scaledStart.y);
+              ctx.lineTo(scaledEnd.x, scaledEnd.y);
+              // ctx.strokeStyle = isHovered ? "#ff0000" : "#1efc4e";
+              // ctx.lineWidth = isHovered ? 2 : 1.5;
+              ctx.strokeStyle = "#1efc4e";
+              ctx.lineWidth = 1.5;
+              ctx.stroke();
+              ctx.closePath();
+
+              const lineName = roi.name;
+              ctx.font = "12px Arial";
+              ctx.fillStyle = "#000";
+              ctx.fillText(lineName, midX - 15, midY - 10);
+
+              const arrowOffset = 0;
+
+              const adjustedUpX =
+                arrowOffset * Math.cos(angle) + 15 * Math.sin(angle);
+              const adjustedUpY =
+                arrowOffset * Math.sin(angle) - 15 * Math.cos(angle);
+
+              const adjustedDownX =
+                -arrowOffset * Math.cos(angle) - 15 * Math.sin(angle);
+              const adjustedDownY =
+                -arrowOffset * Math.sin(angle) + 15 * Math.cos(angle);
+
+              const upArrowX = midX + adjustedUpX;
+              const upArrowY = midY + adjustedUpY;
+
+              const downArrowX = midX + adjustedDownX;
+              const downArrowY = midY + adjustedDownY;
+
+              if (roi.upArrow) {
+                drawArrow(ctx, upArrowX, upArrowY, 10, "#1efc4e", angle);
+              }
+              if (roi.downArrow) {
+                drawArrow(
+                  ctx,
+                  downArrowX,
+                  downArrowY,
+                  10,
+                  "#ffff00",
+                  angle + Math.PI
+                );
+              }
+            }
+          });
+        }
+
+        function drawArrow(
+          ctx,
+          x,
+          y,
+          size = 10,
+          color = "#1efc4e",
+          rotationAngle = 0
+        ) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(rotationAngle);
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(-size, size);
+          ctx.lineTo(size, size);
+          ctx.closePath();
+          ctx.fillStyle = color;
+          ctx.fill();
+          ctx.restore();
+        }
+
+        function drawPointer(x, y) {
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, 2 * Math.PI);
+          ctx.fillStyle = "#1efc4e";
+          ctx.fill();
+          ctx.strokeStyle = "#1efc4e";
+          ctx.stroke();
+          ctx.closePath();
+        }
+
+        $canvas.on("mousemove", (event) => {
+          const rect = $canvas[0].getBoundingClientRect();
+          const mouseX = event.clientX - rect.left;
+          const mouseY = event.clientY - rect.top;
+
+          let hoverDetected = false;
+          let hoveredLine = null;
+
+          node?.nodeRois.forEach((roi, index) => {
+            if (roi.type === "line") {
+              const [start, end] = roi.coords;
+              const scaledStart = {
+                x: start.x * node.scaleX,
+                y: start.y * node.scaleY,
+              };
+              const scaledEnd = {
+                x: end.x * node.scaleX,
+                y: end.y * node.scaleY,
+              };
+
+              if (isMouseNearLine(mouseX, mouseY, scaledStart, scaledEnd)) {
+                roi.hovered = true;
+                hoverDetected = true;
+                hoveredLine = {
+                  index,
+                  coords: {
+                    x: (scaledStart.x + scaledEnd.x) / 2,
+                    y: (scaledStart.y + scaledEnd.y) / 2,
+                  },
+                  name: roi.name,
+                };
+              } else {
+                roi.hovered = false;
+              }
+            }
+          });
+
+          let display = false;
+          if (hoverDetected && hoveredLine) {
+            $canvas.css("cursor", "pointer");
+            const { x, y, index, name } = hoveredLine;
+            display = true;
+            handleEditButton(index, x, y, name, display);
+          } else {
+            $canvas.css("cursor", "default");
+            display = false;
+            handleEditButton(0, 0, 0, "", display);
+          }
+          // drawROIs();
+        });
+
+        $canvas.on("mousemove", (event) => {
+          const rect = $canvas[0].getBoundingClientRect();
+          const mouseX = event.clientX - rect.left;
+          const mouseY = event.clientY - rect.top;
+
+          let hoverDetected = false;
+
+          node?.nodeRois.forEach((roi, index) => {
+            if (roi.type === "line") {
+              const [start, end] = roi.coords;
+              const scaledStart = {
+                x: start.x * node.scaleX,
+                y: start.y * node.scaleY,
+              };
+              const scaledEnd = {
+                x: end.x * node.scaleX,
+                y: end.y * node.scaleY,
+              };
+              if (isMouseNearLine(mouseX, mouseY, scaledStart, scaledEnd)) {
+                roi.hovered = true;
+                hoverDetected = true;
+                handleEditButton(
+                  index,
+                  (scaledStart.x + scaledEnd.x) / 2,
+                  (scaledStart.y + scaledEnd.y) / 2,
+                  roi.name,
+                  "show"
+                );
+              } else {
+                roi.hovered = false;
+              }
+            }
+          });
+          if (!hoverDetected) {
+            $(".arrow-group").css("display", "none");
+          }
+        });
+
+        function handleEditButton(index, x, y, lineName, display) {
+          const arrowGroupId = `arrow-group-${index}`;
+          let $arrowGroup = $(`#${arrowGroupId}`);
+          if (!$arrowGroup.length) {
+            $arrowGroup = $(
+              `<div id="${arrowGroupId}" class="arrow-group"></div>`
+            );
+            const $editLabel = $(
+              `<button class="red-ui-button red-ui-button-small"><i class="fa fa-edit"></i></button>`
+            );
+            $editLabel.on("click", () =>
+              createLineConfigComponent(index, "show")
+            );
+            $arrowGroup.append($editLabel);
+            $("#canvas-main-contianer").append($arrowGroup);
+          }
+
+          if (display === "show") {
+            $arrowGroup.css({
+              position: "absolute",
+              left: `${x + 5}px`,
+              top: `${y - 5}px`,
+              zIndex: 1000,
+              display: "block",
+            });
+          } else if (display === "hide") {
+            $arrowGroup.css({
+              display: "none",
+            });
+          }
+        }
+
+        function createLineConfigComponent(index, display) {
+          let currentLine = node.nodeRois[index];
+
+          const $mainDiv = $(`
+              <div class="cont-form-line-config-one">
+                <div>
+                   <label for="line-config-main-input"> Line name: </label>
+                  <input type="text" placeholder="Line name" id="line-config-main-input" value="${
+                    currentLine?.name || ""
+                  }" />
+                </div>
+                <div>
+                  <label for="line-config-main-input-uparrow"> Up arrow(in): </label>
+                  <input type="checkbox" ${
+                    currentLine?.upArrow ? "checked" : ""
+                  } id="line-config-main-input-uparrow" style="width: unset!important">
+                  </div>
+                  <div>
+                  <label for="line-config-main-input-downarrow"> Down arrow(out): </label>
+                  <input type="checkbox" ${
+                    currentLine?.downArrow ? "checked" : ""
+                  } id="line-config-main-input-downarrow" style="width: unset!important">
+                </div>
+              </div>
+              <div class="cont-form-line-config-two">
+                <button class="red-ui-button red-ui-button-small line-config-main-btn-save">Save</button>
+                <button class="red-ui-button red-ui-button-small line-config-main-btn-cancel">Cancel</button>
+                <button class="red-ui-button red-ui-button-small line-config-main-btn-delete">Delete</button>
+              </div>
+          `);
+
+          $mainDiv.find(".line-config-main-btn-save").on("click", () => {
+            let name = $("#line-config-main-input").val();
+            let upArrow = $("#line-config-main-input-uparrow").prop("checked");
+            let downArrow = $("#line-config-main-input-downarrow").prop(
+              "checked"
+            );
+            node.nodeRois[index] = {
+              ...currentLine,
+              name: name,
+              upArrow: upArrow,
+              downArrow: downArrow,
+            };
+            drawROIs();
+            $lineConfigMain.hide();
+          });
+
+          $mainDiv.find(".line-config-main-btn-cancel").on("click", () => {
+            $lineConfigMain.hide();
+          });
+
+          $mainDiv.find(".line-config-main-btn-delete").on("click", () => {
+            node.nodeRois.splice(index, 1);
+            drawROIs();
+            $lineConfigMain.hide();
+          });
+
+          $lineConfigMain.empty();
+          $lineConfigMain.append($mainDiv);
+
+          if (display === "show") {
+            $lineConfigMain.show();
+          } else if (display === "hide") {
+            $lineConfigMain.hide();
+          }
+        }
+
+        $clearBtn.on("click", () => {
+          node.nodeRois = [];
+          currentRoi = [];
+          ctx.clearRect(0, 0, $canvas[0].width, $canvas[0].height);
+          ctx.drawImage(image, 0, 0, $canvas[0].width, $canvas[0].height);
+        });
+
+        window.addEventListener("keydown", function (event) {
+          if ((event.ctrlKey || event.metaKey) && event.key === "z") {
+            undo();
+          }
+        });
+
+        $backBtn.on("click", () => {
+          undo();
+        });
+
+        handleFormatChange(node.inputType);
+        updateDataCollectionInput();
+
+        function undo() {
+          node.nodeRois?.pop();
+          currentRoi = [];
+          drawROIs();
+        }
+
+        $("#node-input-inputType").on("change", function (event) {
+          handleFormatChange($(this).val());
+        });
+
+        function handleFormatChange(type) {
+          if (type === "frame-buffer") {
+            $("#rois-feed-canvas-section").hide();
+            $("#rois-feed-selectedFile").hide();
+            $("#rois-feed-selectedDataColl").hide();
+            fetchNodeData();
+
+            // fetchInterval = setInterval(fetchNodeData, 600);
+          } else {
+            $("#rois-feed-selectedDataColl").show();
+            $loader.hide();
+            $notFound.hide();
+            updateDataCollectionInput();
+
+            if (node.selectedDataColl !== "") {
+              updateFileInput(node.selectedDataColl);
+            }
+            if (node.selectedFile !== "") {
+              updateImageOnCanvas(node.selectedFile);
+            }
+          }
+        }
+      },
+    });
+  })();
+</script>
+
+<script type="text/html" data-help-name="object counting">
+  <p>
+    This node processes input images to identify and annotate regions of
+    interest (ROIs) based on defined parameters. It supports various ROI shapes
+    and provides detailed metadata for each detected region.
+  </p>
+</script>
+
+<script type="text/html" data-template-name="object counting">
+  <style>
+    .cont-form-line-config-one {
+      display: flex;
+      flex-direction: column;
+    }
+    .cont-form-line-config-one div {
+      padding: 5px;
+    }
+    .cont-form-line-config-two {
+      padding: 5px;
+    }
+  </style>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name </label>
+    <input
+      type="text"
+      id="node-input-name"
+      data-i18n="Name"
+      placeholder="Name"
+    />
+  </div>
+
+  <div class="form-row">
+    <label for="node-input-boundingBoxColor"> Bounding box color: </label>
+    <input
+      id="node-input-boundingBoxColor"
+      data-i18n="boundingBoxColor"
+      type="color"
+    />
+  </div>
+
+  <div class="form-row">
+    <label for="node-input-labelColor"> Label color: </label>
+    <input id="node-input-labelColor" data-i18n="labelColor" type="color" />
+  </div>
+
+  <div class="form-row">
+    <label for="node-input-lineColor"> Line color: </label>
+    <input id="node-input-lineColor" data-i18n="lineColor" type="color" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-fontSize"> Label font size: </label>
+    <input id="node-input-fontSize" data-i18n="fontSize" type="text" />
+  </div>
+
+  <div class="form-row" id="object-detection-objects">
+    <!-- <label for="node-input-objects"> Objects: </label> -->
+    <label for="node-input-multiselectObjects"> Objects: </label>
+    <!-- <textarea
+      id="node-input-objects"
+      data-i18n="Objects"
+      rows="4"
+      placeholder="Enter objects separated by commas (e.g., person, car, dog)"
+      style="width: 70%; min-width: 70%; max-width: 70%;"
+    ></textarea> -->
+    <input
+      type="text"
+      id="node-input-multiselectObjects"
+      style="width: 70%; min-width: 70%; max-width: 70%;"
+    />
+    <div class="form-tips" style="margin-top: 10px;">
+      <span data-i18n="node-red:ObjectModelNode.tip">
+        Tip: Select a comprehensive list of objects to identify.
+      </span>
+    </div>
+  </div>
+
+  <div
+    class="form-row"
+    id="rois-feed-input-type-selector"
+    style="margin-bottom: 10px;"
+  >
+    <label for="node-input-inputType">Select input type: </label>
+    <select id="node-input-inputType" style="width: 70%;">
+      <option value="frame-buffer" data-i18n="ROI.frame-buffer">
+        Frame Buffer (from video feed node)
+      </option>
+      <option value="data-collection" data-i18n="ROI.data-collection">
+        Select from data collection
+      </option>
+    </select>
+  </div>
+
+  <div class="form-row" id="rois-feed-selectedDataColl">
+    <label for="node-input-selectedDataColl"> Select data collection: </label>
+    <select id="node-input-selectedDataColl" style="width: 70%;"></select>
+  </div>
+
+  <div class="form-row" id="rois-feed-selectedFile">
+    <label for="node-input-selectedFile"> Select file path: </label>
+    <select id="node-input-selectedFile" style="width: 70%;"></select>
+  </div>
+
+  <div class="form-row" id="rois-feed-canvas-section">
+    <div style="margin-bottom: 10px; display: none;">
+      <label for="node-input-shapeSelector">Select shape: </label>
+      <select id="node-input-shapeSelector" style="width: 70%;">
+        <option value="line" data-i18n="ROI.line">Line</option>
+      </select>
+    </div>
+    <div
+      style="margin-bottom: 10px; border: 1px gray dashed;"
+      class="cont-form-line-config-main"
+    ></div>
+    <div
+      id="canvas-main-contianer"
+      style="height: fit-content; width: fit-content; position: relative;"
+    >
+      <canvas id="rois-feed-canvas" style="cursor: crosshair;"></canvas>
+    </div>
+    <div id="rois-feed-error-message" style="font-size: 11px; color: red;">
+      Failed to load image. Please check the image URL.
+    </div>
+    <div>
+      <button
+        type="button"
+        class="red-ui-button red-ui-button-small"
+        id="rois-feed-clear-button"
+        style="margin-right: 10px; "
+      >
+        Clear
+      </button>
+      <button
+        type="button"
+        class="red-ui-button red-ui-button-small"
+        id="rois-feed-back-button"
+      >
+        Undo
+      </button>
+    </div>
+  </div>
+
+  <div class="rois-feed-loader">
+    <p style="text-align: center; font-size: 16px; padding: 5px;">Loading...</p>
+  </div>
+
+  <div class="rois-feed-not-found">
+    <p style="text-align: center; font-size: 16px; padding: 5px;">
+      No contents found
+    </p>
+  </div>
+</script>

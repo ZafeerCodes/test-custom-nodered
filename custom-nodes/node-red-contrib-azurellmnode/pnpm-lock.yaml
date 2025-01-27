@@ -1,0 +1,50 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.4.7
+      web-socket-server:
+        specifier: file:../../packages/local_modules/web-socket-server
+        version: file:../../packages/local_modules/web-socket-server
+
+packages:
+
+  dotenv@16.4.7:
+    resolution: {integrity: sha512-47qPchRCykZC03FhkYAhrvwU4xDBFIj1QPqaarj6mdM/hgUzfPHcpkHJOn3mJAufFeeAxAzeGsr5X0M4k6fLZQ==}
+    engines: {node: '>=12'}
+
+  web-socket-server@file:../../packages/local_modules/web-socket-server:
+    resolution: {directory: ../../packages/local_modules/web-socket-server, type: directory}
+
+  ws@8.18.0:
+    resolution: {integrity: sha512-8VbfWfHLbbwu3+N6OKsOMpBdT4kXPDDB9cJk2bJ6mh9ucxdlnNvH1e+roYkKmN9Nxw2yjz7VzeO9oOz2zJ04Pw==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
+snapshots:
+
+  dotenv@16.4.7: {}
+
+  web-socket-server@file:../../packages/local_modules/web-socket-server:
+    dependencies:
+      ws: 8.18.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  ws@8.18.0: {}

@@ -1,0 +1,100 @@
+  <!-- Node-red: influx database configs[start]  -->
+  <script type="text/html" data-template-name="influxDatabaseConfigs">
+	<div class="form-row">
+		<label for="node-config-input-name">
+			<span data-i18n="name">Connection name</span>
+		</label>
+		<input type="text" id="node-config-input-name" data-i18n="Name" />
+	</div>
+  <div class="form-row">
+    <label for="node-config-input-influxdbVersion">
+      <i class="fa fa-code-fork"></i> 
+      <span data-i18n="version">Version</span>
+     </label>
+    <select type="text" id="node-config-input-influxdbVersion" style="width: 70%;">
+        <option value="2.0">2.0</option> 
+    </select>
+</div>
+	<div class="form-row">
+		<ul style="background: #fff; min-width: 600px; margin-bottom: 20px;" id="influxdb-config-tabs"></ul>
+	</div>
+	<div id="influxdb-config-tabs-content" style="min-height: 170px;">
+		<div id="influxdb-config-tab-connection" style="display: none;">
+			<div class="form-row">
+				<label for="node-config-input-url">
+					<i class="fa fa-server"></i>
+					<span data-i18n="url">URL</span>
+				</label>
+				<input type="text" id="node-config-input-url" data-i18n="Url" style="width: 80%;"  placeholder="http://localhost:8086"  />
+			</div>
+			<div class="form-row">
+				<label for="node-config-input-connectionTimeout" style="width: 150px;">
+					<i class="fa fa-hourglass-half"></i>
+					<span data-i18n="ConnectionTimeout" >Connection Timeout</span>
+				</label>
+				<input type="text" id="node-config-input-connectionTimeout" data-i18n="ConnectionTimeout" style="width: 60%;" placeholder="Connection Timeout" />
+			</div>
+		</div>
+		<div id="influxdb-config-tab-security" style="display: none;">
+			<div class="form-row">
+				<label for="node-config-input-token">
+					<i class="fa fa-lock"></i>
+					<span data-i18n="Token">Token</span>
+				</label>
+				<input type="password" id="node-config-input-token" data-i18n="Token" style="width: 80%;" placeholder="Token"/>
+			</div>
+		</div>
+	</div>
+</script>
+
+  <script type="text/javascript">
+    RED.nodes.registerType('influxDatabaseConfigs', {
+      category: 'config',
+      defaults: {
+        name: {
+          value: '',
+        },
+        influxdbVersion: {
+          value: "2.0",
+        },
+        url: {
+          value: 'http://localhost:8086',
+        },
+        connectionTimeout: {
+          value: 10,
+        },
+        token: {
+          value: '',
+        },
+        rejectUnauthorized: { value: true }
+      },
+      credentials: {
+        token: { type: "password" }
+      },
+      label: function () {
+        var version = "[v" + "2.0" + "]";
+        return version + " / " + (this.name ? this.name : this.url);
+      },
+      labelStyle: function () {
+        return this.name ? 'node_label_italic' : '';
+      },
+      oneditprepare: function () {
+        const tabs = RED.tabs.create({
+          id: 'influxdb-config-tabs',
+          onchange: function (tab) {
+            $('#influxdb-config-tabs-content').children().hide();
+            $('#' + tab.id).show();
+          },
+        });
+        tabs.addTab({
+          id: 'influxdb-config-tab-connection',
+          label: this._('Connection'),
+        });
+        tabs.addTab({
+          id: 'influxdb-config-tab-security',
+          label: this._('Security'),
+        });
+      },
+    });
+  </script>
+  <!-- Node-red: influx database configs[end]  -->

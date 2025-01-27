@@ -1,0 +1,28 @@
+<script type="text/javascript">
+  RED.nodes.registerType("azure llm", {
+    category: "azure services",
+    color: "#cbcbcb",
+    defaults: {
+      name: { value: "azure llm" },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "font-awesome/fa-magic",
+    label: function () {
+      return this.name || "azure llm";
+    },
+  });
+</script>
+
+<script type="text/html" data-help-name="azure llm">
+  <p>The node that can be useful for access Azure OpenAI and Cognitive Search Services to analyse and generate response from documents.<br/></p>
+</script>
+
+<script type="text/html" data-template-name="azure llm">
+
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name </label>
+    <input type="text" id="node-input-name" data-i18n="Name" placeholder="Name">
+  </div>
+
+</script>

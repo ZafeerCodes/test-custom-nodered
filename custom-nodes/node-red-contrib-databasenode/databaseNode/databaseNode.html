@@ -1,0 +1,2245 @@
+<!-- Node-red: View data(Influx) section[start]   -->
+
+<body>
+  <style>
+    #node-input-btn-influxDatabaseViewTableConfigs-add {
+      margin-left: 0px !important;
+    }
+
+    #node-input-btn-pgDatabaseViewTableConfigs-add {
+      margin-left: 0px !important;
+    }
+
+    #container-table-payload-tables-main {
+      margin: 20px 0;
+      min-width: 700px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background-color: #f9f9f9;
+    }
+
+    .container-table-payload-table-container {
+      margin: 20px 0;
+      width: 100%;
+      padding: 10px;
+      border: 1px dashed #ccc;
+      border-radius: 5px;
+      background-color: #f9f9f9;
+    }
+
+    .container-table-payload-table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .container-table-payload-table-header h3 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .container-table-payload-payload-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+    }
+
+    .container-table-payload-payload-table th,
+    .container-table-payload-payload-table td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: center;
+    }
+
+    .container-table-payload-payload-table th {
+      background-color: #f2f2f2;
+      font-weight: bold;
+    }
+
+    .container-table-payload-no-data-message {
+      text-align: center;
+      color: #888;
+      font-style: italic;
+      display: none;
+    }
+
+    .container-table-payload-save-all-button {
+      margin-top: 20px;
+      display: block;
+      width: 100%;
+      font-size: 16px;
+    }
+
+    .influx-action-dropdown-content {
+      display: none;
+      position: absolute;
+      background: white;
+      border: 1px solid #ccc;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      border-radius: 5px;
+      overflow: hidden;
+      min-width: 100px;
+      z-index: 100;
+    }
+
+    .influx-action-dropdown-content a {
+      display: block;
+      padding: 8px 12px;
+      text-decoration: none;
+      color: black;
+      background: white;
+      border: none;
+      text-align: left;
+      width: 100%;
+      cursor: pointer;
+    }
+
+    .influx-action-dropdown-content a:hover {
+      background: #f1f1f1;
+    }
+  </style>
+  <script>
+    var API_URI = `http://${window.location.hostname}:4500`;
+    var auth_token = localStorage.getItem("percepto-user");
+    var INFLUX_URI = `http://${window.location.hostname}:8086`;
+
+    var baseerBuilderConfigs = {
+      postgreDb: {
+        username: "postgres",
+        password: "JAY1516VISH",
+        port: 5432,
+        host: "localhost",
+        database: "postgres",
+        table: null
+      },
+      influxDb: {
+        port: 8086,
+        token: "Mjj_77P__gM0dp_d0OO-X7Avsr4U1WhwXsTdHEfKeDOO4DPskf7UNzc6quzeDu2pfslHNGlicOQ1k4hPAW9nJg==",
+        url: "http://localhost:8086",
+        org: "d59568dcf367ffdd",
+        bucket: "bucket",
+        measurment: null
+      }
+    };
+
+    var copiedBaseerBuilderConfigs = { ...baseerBuilderConfigs };
+
+    function getBaseerBuilderConfigs(type) {
+      return copiedBaseerBuilderConfigs[type];
+    }
+
+    function setBaseerBuilderConfigs(type, updates) {
+      if (copiedBaseerBuilderConfigs[type]) {
+        copiedBaseerBuilderConfigs[type] = { ...copiedBaseerBuilderConfigs[type], ...updates };
+        return true;
+      }
+      console.error(`Configuration type "${type}" not found.`);
+      return false;
+    }
+
+    var uniqueId = () => {
+      return Math.random().toString(36).substr(2, 9);
+    }
+    function classifyInfluxMeasurmentKeysTags(data) {
+      const result = [];
+      data.forEach(entry => {
+        for (const [key, value] of Object.entries(entry)) {
+          if (!key.startsWith("_") && key !== "table" && key !== "result" && key) {
+            const type = isNaN(value) ? "tag" : "field";
+            result.push({ name: key, type });
+          }
+        }
+      });
+      const uniqueResult = Array.from(new Map(result.map(item => [item.name, item])).values());
+      return uniqueResult;
+    }
+
+    function createTablesFromDatabase(payload) {
+      const pgUrl = `${API_URI}/postgresql/create-table`;
+
+      return new Promise((resolve, reject) => {
+        $.ajax({
+          url: pgUrl,
+          method: 'POST',
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + auth_token,
+          },
+          data: JSON.stringify({
+            ...payload
+          }),
+          success: function (data) {
+            resolve(data);
+          },
+          error: function (error) {
+            console.error('Failed to fetch data:', error);
+            reject(error);
+          }
+        });
+      });
+    }
+    function getTableLists(payload) {
+      const pgUrl = `${API_URI}/postgresql/tables`;
+
+      return new Promise((resolve, reject) => {
+        $.ajax({
+          url: pgUrl,
+          method: 'POST',
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + auth_token,
+          },
+          data: JSON.stringify({
+            ...payload
+          }),
+          success: function (data) {
+            resolve(data);
+          },
+          error: function (error) {
+            console.error('Failed to fetch data:', error);
+            reject(error);
+          }
+        });
+      });
+    }
+    function getTableDetails(type, payload, configs) {
+      if (type === "postgreDb") {
+        const pgUrl = `${API_URI}/postgresql/query`;
+
+        return new Promise((resolve, reject) => {
+          $.ajax({
+            url: pgUrl,
+            method: 'POST',
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + auth_token,
+            },
+            data: JSON.stringify({
+              ...payload
+            }),
+            success: function (data) {
+              resolve(data);
+            },
+            error: function (error) {
+              console.error('Failed to fetch data:', error);
+              reject(error);
+            }
+          });
+        });
+      } else if (type === "influxDb") {
+        const influxUrl = `${INFLUX_URI}/api/v2/query?orgID=${configs.org}`;
+        const query = `
+            from(bucket: "${configs.bucket}")
+              |> range(start: 0)
+              |> filter(fn: (r) => r._measurement == "${configs.measurment}")
+              |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+          `;
+
+        return new Promise((resolve, reject) => {
+          $.ajax({
+            url: influxUrl,
+            method: 'POST',
+            headers: {
+              'Authorization': `Token ${configs.token}`,
+              'Accept': 'application/json',
+              'Content-Type': 'application/vnd.flux'
+            },
+            data: query,
+            success: function (data) {
+              const lines = data?.trim().split('\n');
+              const headers = lines[0].split(',');
+              const result = lines.slice(1).map(line => {
+                const values = line.split(',');
+                const entry = {};
+                headers.forEach((header, index) => {
+                  entry[header?.trim()] = values[index]?.trim();
+                });
+                return entry;
+              });
+              resolve(result);
+            },
+            error: function (error) {
+              console.error('Failed to fetch data:', error);
+              reject(error);
+            }
+          });
+        });
+      }
+
+    }
+    function createMeasurment(payload, params) {
+      const influxUrl = `${params.url || INFLUX_URI}/api/v2`;
+      const { measurementName, keys } = payload;
+      function constructLineProtocol(measurementName, keys) {
+        const tags = keys
+          .filter(key => key.type === 'tag')
+          .map(tag => `${tag.name}=${tag.value}`)
+          .join(',');
+
+        const fields = keys
+          .filter(key => key.type === 'field')
+          .map(field => {
+            const value = (typeof field.value === 'number') ? field.value : `"${field.value}"`;
+            return `${field.name}=${value}`;
+          })
+          .join(',');
+
+        const timestamp = Date.now() * 1000000;
+        return `${measurementName},${tags} ${fields} ${timestamp}`;
+      }
+      return new Promise((resolve, reject) => {
+        $.ajax({
+          url: `${influxUrl}/query?org=${params.org}`,
+          method: 'POST',
+          headers: {
+            'Authorization': `Token ${params.token}`,
+            'Content-Type': 'application/vnd.flux',
+          },
+          data: `
+              from(bucket: "${params.bucket}")
+                |> range(start: -1h)
+                |> filter(fn: (r) => r._measurement == "${measurementName}")
+                |> limit(n: 1)
+            `,
+          success: function (queryResponse) {
+            const exists = queryResponse.results && queryResponse.results.length > 0;
+            const lineProtocol = constructLineProtocol(measurementName, keys);
+
+            $.ajax({
+              url: `${influxUrl}/write?org=${params.org}&bucket=${params.bucket}&precision=ns`,
+              method: 'POST',
+              headers: {
+                'Authorization': `Token ${params.token}`,
+                'Content-Type': 'text/plain',
+              },
+              data: lineProtocol,
+              success: function () {
+                console.log(`Measurement ${exists ? 'updated' : 'created'} successfully!`);
+                resolve(`Measurement ${exists ? 'updated' : 'created'} successfully`);
+              },
+              error: function (writeError) {
+                console.error(`Error ${exists ? 'updating' : 'creating'} measurement:`, writeError);
+                reject(`Error ${exists ? 'updating' : 'creating'} measurement: ${writeError.statusText}`);
+              },
+            });
+          },
+          error: function (queryError) {
+            console.error('Error querying existing measurements:', queryError);
+            reject(`Error querying existing measurements: ${queryError.statusText}`);
+          },
+        });
+      });
+    }
+
+    async function updatePostgreTable(payload) {
+      const pgUrl = `${API_URI}/postgresql/query`;
+
+      return new Promise((resolve, reject) => {
+        $.ajax({
+          url: pgUrl,
+          method: 'POST',
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + auth_token,
+          },
+          data: JSON.stringify({
+            ...payload
+          }),
+          success: function (data) {
+            resolve(data);
+          },
+          error: function (error) {
+            console.error('Failed to fetch data:', error);
+            reject(error);
+          }
+        });
+      });
+    }
+    async function createColumnRow(column = {}, tableLists, columnsContainer, configs, callback) {
+      if (!configs.table) {
+        console.log("Table not selected!")
+      }
+      const availableTables = tableLists;
+
+      const columnRowContainer = $('<div>', { style: 'display: flex; gap: 10px;' });
+      const columnRow = $('<div>', { class: 'node-table-column-row', style: 'display: flex; flex-direction: column; gap: 10px; width: 100%; border: 1px gray dashed; padding: 5px;' });
+      const actionButtonCont = $('<div>', { style: 'display: flex; flex-direction: row; gap: 10px; padding: 5px;' });
+
+      const columnName = $('<div>', { style: 'width: 100%;' }).append(
+        $('<input>', {
+          type: 'text',
+          placeholder: "Column name",
+          class: 'node-input-column-name',
+          value: column.name || "",
+          required: true,
+          style: 'width: 100%;'
+        })
+      );
+
+      const columnType = $('<div>', { style: 'width: 100%;' }).append(
+        $('<select>', { class: 'node-input-column-type', style: 'width: 100%;' }).append(
+          '<option value="VARCHAR(255)">VARCHAR</option>',
+          '<option value="INTEGER">INT</option>',
+          '<option value="UUID">UUID</option>',
+          '<option value="BOOLEAN">BOOLEAN</option>',
+          '<option value="TEXT[]">ARRAY [string]</option>',
+          '<option value="INTEGER[]">ARRAY [number]</option>',
+        ).val(column.type || "VARCHAR(255)")
+      );
+
+      const isPrimary = $('<div>', { style: 'flex: 1; display: flex; flex-direction: row; justify-content: flex-start; align-items: flex-start; width: 100%;' }).append(
+        $('<input>', {
+          type: 'checkbox',
+          class: 'node-input-column-primary',
+          checked: column.isPrimary || false,
+          style: 'margin-right: 5px; width: unset!important;'
+        }),
+        $('<label>', { text: 'Primary Key', style: 'display: block;' })
+      );
+
+      const isForeign = $('<div>', { style: 'flex: 1; display: flex; flex-direction: row; justify-content: flex-start; align-items: flex-start; width: 100%;' }).append(
+        $('<input>', {
+          type: 'checkbox',
+          class: 'node-input-column-foreign',
+          checked: column.isForeign || false,
+          style: 'margin-right: 5px; width: unset!important;'
+        }),
+        $('<label>', { text: 'Foreign Key', style: 'display: block;' })
+      );
+      const refTable = $('<div>', { style: 'width: 100%;' }).append(
+        $('<select>', {
+          class: 'node-input-column-ref-table',
+          disabled: !column.isForeign,
+          style: 'width: 100%;',
+          change: function () {
+            const selectedTable = $(this).val();
+            populateRefColumnOptions(selectedTable);
+          }
+        }).append(
+          $('<option>', { value: "", text: "Reference table" }),
+          availableTables?.filter((table) => configs.table ? table !== configs.table : table)?.map(table => $('<option>', { value: table, text: table }))
+        )
+      );
+
+      const refColumn = $('<div>', { style: 'width: 100%;' }).append(
+        $('<select>', {
+          class: 'node-input-column-ref-column',
+          disabled: !column.isForeign,
+          style: 'width: 100%;'
+        }).append(
+          $('<option>', { value: "", text: "Reference column" })
+        )
+      );
+      async function populateRefColumnOptions(selectedTable) {
+        try {
+          const refColumnSelect = refColumn.find('select.node-input-column-ref-column');
+          refColumnSelect.empty().append($('<option>', { value: "", text: "Select a column" }));
+          const payload = {
+            query: `
+              SELECT 
+                  c.column_name, 
+                  c.data_type, 
+                  c.character_maximum_length, 
+                  c.is_nullable, 
+                  tc.constraint_type
+              FROM 
+                  information_schema.columns AS c
+              LEFT JOIN 
+                  information_schema.key_column_usage AS kcu
+              ON 
+                  c.table_name = kcu.table_name
+              AND 
+                  c.column_name = kcu.column_name
+              LEFT JOIN 
+                  information_schema.table_constraints AS tc
+              ON 
+                  tc.constraint_name = kcu.constraint_name
+              WHERE 
+                  c.table_schema = 'public' 
+                  AND c.table_name = $1;
+            `,
+            configs: configs,
+            params: [selectedTable]
+          };
+          const columnsByTable = (await getTableDetails("postgreDb", payload) || []);
+          if (columnsByTable) {
+            columnsByTable?.forEach(column => {
+              refColumnSelect.append($('<option>', { value: column?.column_name, text: `${column?.column_name} ${column?.constraint_type ? ` (${column?.constraint_type})` : ""}` }));
+            });
+          }
+        } catch (error) {
+          console.error('Error populating reference column options:', error);
+        }
+      }
+      if (column.referencesTable) {
+        refTable.find('select.node-input-column-ref-table').val(column.referencesTable);
+        populateRefColumnOptions(column.referencesTable);
+        refColumn.find('select.node-input-column-ref-column').val(column.referencesColumn);
+      }
+
+      const saveButton = $('<button>', {
+        type: 'button',
+        class: 'red-ui-button red-ui-button-small node-input-save-column',
+        text: 'Save'
+      }).on('click', function () {
+        const rowContainer = $(this).closest('.node-table-column-row');
+
+        const columnData = {
+          name: rowContainer.find('.node-input-column-name').val(),
+          type: rowContainer.find('.node-input-column-type').val(),
+          isPrimary: rowContainer.find('.node-input-column-primary').is(':checked'),
+          isForeign: rowContainer.find('.node-input-column-foreign').is(':checked'),
+          referencesTable: rowContainer.find('.node-input-column-ref-table').val(),
+          referencesColumn: rowContainer.find('.node-input-column-ref-column').val(),
+          isNullable: true,
+          isNewColumn: true
+        };
+
+        const payload = {
+          query: `
+              ALTER TABLE ${configs.table} ADD COLUMN ${columnData.name} ${columnData.type} DEFAULT NULL;
+              ${columnData.isPrimary ? `
+                  ALTER TABLE ${configs.table}
+                  ADD CONSTRAINT ${configs.table}_${columnData.name}_pk PRIMARY KEY (${columnData.name});
+              ` : ''}
+                ${columnData.isForeign && columnData.referencesTable && columnData.referencesColumn ? `
+                  ALTER TABLE ${configs.table}
+                  ADD CONSTRAINT ${configs.table}_${columnData.name}_fk
+                  FOREIGN KEY (${columnData.name})
+                  REFERENCES ${columnData.referencesTable} (${columnData.referencesColumn})
+                  ON DELETE CASCADE;
+              ` : ''}
+          `,
+
+          configs: configs,
+          params: []
+        };
+        // updatePostgreTable(payload)
+        //   .then((res) => {
+        //     RED.notify("Successfully created column", "success");
+        //     callback(columnData.name);
+        //   })
+        //   .catch((err) => {
+        //     console.error("Error while updating table", err);
+        //     RED.notify("Error while updating table: " + err?.responseJSON?.message, "error");
+        //   });
+        callback(columnData.name, columnData);
+
+      });
+
+      // const deleteButton = $('<button>', {
+      //   type: 'button',
+      //   class: 'red-ui-button red-ui-button-small node-input-delete-column',
+      //   text: 'Delete'
+      // }).on('click', function () {
+      //   columnRowContainer.remove();
+      // });
+
+      isForeign.find('input').on('change', function () {
+        const isChecked = $(this).is(':checked');
+        refTable.find('select').prop('disabled', !isChecked);
+        refColumn.find('select').prop('disabled', !isChecked);
+      });
+
+      actionButtonCont?.append(saveButton)
+
+      columnRow?.append(columnName, columnType, isPrimary, isForeign, refTable, refColumn, actionButtonCont);
+      columnRowContainer?.append(columnRow);
+      columnsContainer?.append(columnRowContainer);
+    }
+    function createInfluxColumnRow(container, column = {}) {
+      const columnRow = $('<div>', { class: 'form-row column-row' });
+      const keyName = $('<input>', {
+        type: 'text',
+        class: 'red-ui-input node-input-key-name',
+        placeholder: 'Key name',
+        value: column.name || '',
+      });
+      const keyType = $('<select>', { class: 'node-input-key-type' }).append(
+        $('<option>', { value: 'tag', text: 'Tag' }),
+        $('<option>', { value: 'field', text: 'Field' })
+      ).val(column.type || 'tag');
+      const valueType = $('<select>', { class: 'node-input-value-type' }).append(
+        $('<option>', { value: 'num', text: 'NUM' }),
+        $('<option>', { value: 'char', text: 'CHAR' })
+      ).val(column.valueType || 'num');
+      // if (column.type !== 'field') {
+      //   valueType.hide();
+      // }
+      keyType.on('change', function () {
+        if ($(this).val() === 'field') {
+          valueType.show();
+          keyName.prop('disabled', false);
+        } else if ($(this).val() === 'tag') {
+          valueType.show();
+          keyName.prop('disabled', true).val('char');
+          valueType.prop('disabled', true).val('char');
+        }
+      });
+      const removeButton = $('<button>', {
+        type: 'button',
+        class: 'red-ui-button red-ui-button-small remove-btn',
+      }).append(
+        $('<i>', { class: 'fa fa-close' })
+      ).on('click', () => columnRow.remove());
+
+      columnRow.append(keyName, keyType, valueType, removeButton);
+      container.append(columnRow);
+    }
+
+    function updateTablePayloads(nodePayloads, tablePayload) {
+      tablePayload = {
+        ...tablePayload,
+        nodes: tablePayload.nodes.map((node) => {
+          const relevantNodePayloads = nodePayloads.filter(payload => payload.node === node.id);
+
+          if (relevantNodePayloads && relevantNodePayloads.length > 0) {
+            const relevantColumnNames = relevantNodePayloads.map(payload => payload.column);
+            const updatedColumns = node.columns.filter(col => relevantColumnNames.includes(col.name));
+
+            const relevantKeyNames = relevantNodePayloads.map(payload => payload.keyName);
+            const updatedKeys = node.keys.filter(key => relevantKeyNames.includes(key.name));
+
+            return {
+              ...node,
+              columns: updatedColumns.length > 0 ? updatedColumns : [],
+              // keys: updatedKeys.length > 0 ? updatedKeys : node.keys,
+            };
+          } else {
+            return {
+              ...node,
+              columns: node.columns,
+            };
+          }
+        }),
+      };
+
+      tablePayload.nodes.forEach((node) => {
+        const newColumns = [];
+        const newKeys = [];
+
+        const existingColumnNames = new Set(node.columns.map(col => col.name));
+        const existingKeyNames = new Set(node.keys.map(key => key.name));
+
+        const relevantPayloads = nodePayloads.filter(payload => payload.node === node.id);
+
+        relevantPayloads.forEach((payload) => {
+          if (!existingColumnNames.has(payload.column)) {
+            const newColumn = {
+              id: uniqueId(),
+              name: payload.column,
+              keyName: payload.keyName,
+              isTag: payload.isTag
+            };
+
+            if (payload.keyName !== payload.column && payload.valueType !== "custom") {
+              newColumn.valueType = payload.valueType;
+            }
+
+            if (payload.keyName === "custom") {
+              newColumn.staticValue = payload.staticValue;
+              newColumn.staticValueType = payload.staticValueType;
+              newColumn.valueType = payload.valueType;
+            }
+
+            newColumns.push(newColumn);
+            existingColumnNames.add(payload.column);
+          } else {
+            const existingColumn = node.columns.find(col => col.name === payload.column);
+
+            if (existingColumn && !existingColumn.keyName) {
+              if (payload.keyName === "custom") {
+                existingColumn.keyName = payload.keyName;
+                existingColumn.valueType = payload.valueType;
+                existingColumn.staticValue = payload.staticValue;
+                existingColumn.staticValueType = payload.staticValueType;
+              } else {
+                existingColumn.keyName = payload.keyName;
+                existingColumn.isTag = payload.isTag;
+              }
+            }
+          }
+
+          // if (payload.keyName == "custom" && !existingKeyNames.has(payload.column)) {
+          //   const newKey = {
+          //     id: uniqueId(),
+          //     name: payload.keyName,
+          //     type: payload.keyType || 'custom',
+          //   };
+
+          //   if (payload.valueType === 'custom' && payload.staticValue !== null) {
+          //     newKey.staticValue = payload.staticValue;
+          //     newKey.name = payload.column;
+          //   }
+
+          //   newKeys.push(newKey);
+          //   existingKeyNames.add(payload.keyName);
+          // }
+        });
+
+        node.columns = [...node.columns, ...newColumns];
+        // node.keys = [...node.keys, ...newKeys];
+      });
+
+      return tablePayload;
+    }
+
+    function mapKeyType(keyType) {
+      switch (keyType) {
+        case "array_num":
+          return "INTEGER[]";
+        case "array_str":
+          return "TEXT[]";
+        case "array_obj":
+          return "JSONB";
+        case "boolean":
+          return "BOOLEAN";
+        case "num":
+          return "INTEGER";
+        case "float":
+          return "REAL";
+        case "decimal":
+          return "NUMERIC(10, 2)";
+        case "str":
+          return "VARCHAR(255)";
+        case "text":
+          return "TEXT";
+        case "uuid":
+          return "UUID";
+        case "date":
+          return "DATE";
+        case "datetime":
+          return "TIMESTAMP";
+        case "time":
+          return "TIME";
+        case "json":
+          return "JSON";
+        case "jsonb":
+          return "JSONB";
+        default:
+          return "VARCHAR(255)";
+      }
+    }
+  </script>
+
+  <!-- Node-red: database main configuration panel[start]  -->
+  <script type="text/javascript">
+    (function () {
+      let tempPayloads = [];
+      function updateButtonIcon(buttonId, newIconClass) {
+        const button = document.getElementById(buttonId);
+        if (button) {
+          const icon = button.querySelector(".fa");
+          if (icon) {
+            icon.className = newIconClass;
+          }
+        }
+      }
+
+      function setupDatabaseEventHandler(buttonSelector, configType) {
+        $(buttonSelector).on("click", function () {
+          const configTypeDef = RED.nodes.getType(configType);
+          if (configTypeDef) {
+            configTypeDef.defaults.dbConfigs = getBaseerBuilderConfigs("postgreDb");
+          }
+        });
+      }
+
+      function setupTableEventHandler(buttonSelector, configType) {
+        $(buttonSelector).on("click", function () {
+          const configNodeId = $("#node-input-postgreDatabase").val();
+          if (!configNodeId) {
+            RED.notify("Database not selected!", "error");
+          }
+
+          const configNode = RED.nodes.node(configNodeId);
+          const configTypeDef = RED.nodes.getType(configType);
+          if (configTypeDef) {
+            configTypeDef.defaults.dbConfigs = {
+              ...getBaseerBuilderConfigs("postgreDb"),
+              database: configNode?.database || null,
+            };
+          }
+        });
+      }
+
+      function setupInfluxBucketEventHandler(buttonSelector, configType) {
+        $(buttonSelector).on("click", function () {
+          const configTypeDef = RED.nodes.getType(configType);
+          if (configTypeDef) {
+            configTypeDef.defaults.dbConfigs = {
+              ...getBaseerBuilderConfigs("influxDb"),
+              isMeasurementCreation: false
+            };
+          }
+        });
+      }
+
+      function setupInfluxMeasurmentEventHandler(buttonSelector, configType) {
+        $(buttonSelector).on("click", function () {
+          const configNodeId = $("#node-input-influxBucket").val();
+          if (!configNodeId) {
+            RED.notify("Bucket not selected!", "error");
+          }
+
+          const configNode = RED.nodes.node(configNodeId);
+          const configTypeDef = RED.nodes.getType(configType);
+          if (configTypeDef) {
+            configTypeDef.defaults.dbConfigs = {
+              ...getBaseerBuilderConfigs("influxDb"),
+              bucket: configNode?.bucketName || null,
+              isMeasurementCreation: true
+            };
+          }
+        });
+      }
+
+      function updateConfigsValues(type, data) {
+        if (type === "influxDb") {
+          setBaseerBuilderConfigs("influxDb", {
+            ...data
+          })
+        } else if (type === "postgreDb") {
+          setBaseerBuilderConfigs("postgreDb", {
+            ...data
+          })
+        }
+      }
+
+      const ctmTypedFieldTypes = [
+        "msg",
+        {
+          value: "uuid",
+          label: "UUID",
+          icon: "fa fa-random",
+          options: ["uuid"],
+        },
+        {
+          value: "str",
+          label: "String",
+          icon: "fa fa-font",
+        },
+        {
+          value: "num",
+          label: "Number",
+          icon: "fa fa-hashtag",
+        },
+        {
+          value: "bool",
+          label: "Boolean",
+          icon: "fa fa-toggle-on",
+        },
+        {
+          value: "bin",
+          label: "Binary",
+          icon: "fa fa-file",
+        },
+        {
+          value: "jsonata",
+          label: "JSONata",
+          icon: "fa fa-code",
+        },
+        {
+          value: "date",
+          label: "Date",
+          icon: "fa fa-calendar",
+          options: [
+            { value: "", label: "milliseconds since epoch" },
+            { value: "iso", label: "YYYY-MM-DDTHH:mm:ss.sssZ" },
+            { value: "object", label: "JavaScript Date Object" },
+          ]
+        },
+
+      ]
+      RED.nodes.registerType('database', {
+        category: "custom",
+        color: "#cbcbcb",
+        paletteLabel: 'database',
+        defaults: {
+          influxDatabaseConfigs: {
+            type: "influxDatabaseConfigs",
+            required: false
+          },
+          postgreDatabaseConfigs: {
+            type: "postgreDatabaseConfigs",
+            required: false
+          },
+          pgDatabaseViewTableConfigs: {
+            type: "pgDatabaseViewTableConfigs",
+            required: false
+          },
+
+          influxDatabaseViewTableConfigs: {
+            type: "influxDatabaseViewTableConfigs",
+            required: false
+          },
+          databaseServer: { value: "baseer-builder" },
+          databaseType: { value: "influxdb" },
+          postgreDatabase: {
+            type: "pgDatabaseCreationConfigs",
+            required: false,
+          },
+          postgreTable: {
+            type: "pgDatabaseTableCreationConfigs",
+            required: false
+          },
+          influxMeasurment: {
+            type: "influxMeasurementCreationConfigs",
+            required: false
+          },
+          influxBucket: {
+            type: "influxBucketCreationConfigs",
+            required: false
+          },
+          influxOrg: { value: "" },
+          precision: { value: "" },
+          retentionPolicy: { value: "" },
+          name: { value: "" },
+          precisionV18FluxV20: { value: "ms" },
+          retentionPolicyV18Flux: { value: "" },
+          payloadKeys: { value: [] }
+        },
+        inputs: 1,
+        outputs: 0,
+        icon: "db.svg",
+        align: "center",
+        label: function () {
+          return this.name || "database";
+        },
+        labelStyle: function () {
+          return this.name ? "node_label_italic" : "";
+        },
+        oneditprepare: async function () {
+          var node = this;
+          let nodeId = this.id;
+
+          const containerPostgreSQLTableViewButton = $(".node-input-btn-pgDatabaseViewTableConfigs-add");
+          const containerInfluxTableViewButton = $("#node-input-btn-influxDatabaseViewTableConfigs-add");
+
+          // $("#container-table-payload-tables-main").hide();
+
+          const fullFlowData = RED.nodes.createCompleteNodeSet();
+          function getConnectedNodes(nodeId) {
+            return fullFlowData.filter(node => {
+              return node?.wires?.some(wireIds => wireIds.includes(nodeId));
+            });
+          }
+
+          const connectedNodes = getConnectedNodes(nodeId);
+          let payloadKeys = {
+            nodes: connectedNodes
+              ? connectedNodes.map(({ id, name, outputProperties }) => ({
+                id,
+                name: name || "",
+                keys: outputProperties?.map((el) => ({ id: uniqueId(), name: el?.key, type: el?.type, key: el?.key, ...(el?.subKeys && { subKeys: el?.subKeys }) })) || [],
+                columns: [],
+              }))
+              : []
+          };
+
+          function hideElementById(id) {
+            const element = document.getElementById(id);
+            if (element) {
+              element.style.display = "none";
+            }
+          }
+          const elementIdsToHide = [
+            'node-input-pgDatabaseViewTableConfigs',
+            'node-input-btn-pgDatabaseViewTableConfigs-edit',
+            'node-input-influxDatabaseViewTableConfigs',
+            'node-input-btn-influxDatabaseViewTableConfigs-edit',
+          ];
+
+          elementIdsToHide.forEach(hideElementById);
+
+          updateButtonIcon("node-input-btn-influxDatabaseViewTableConfigs-add", "fa fa-eye");
+          updateButtonIcon("node-input-btn-pgDatabaseViewTableConfigs-add", "fa fa-eye");
+
+          $("#node-input-databaseServer").on("change", async function (event) {
+            node.databaseServer = event.target.value;
+
+            if (node.databaseServer === "baseer-builder") {
+              $("#container-database-databaseSever-baseer-builder").show();
+              $("#container-database-databaseSever-client-database").hide();
+
+              updateConfigsValues("influxDb", {
+                org: baseerBuilderConfigs["influxDb"]?.org,
+                token: baseerBuilderConfigs["influxDb"]?.token,
+                url: baseerBuilderConfigs["influxDb"]?.url,
+                port: baseerBuilderConfigs["influxDb"]?.port,
+              });
+
+              updateConfigsValues("postgreDb", {
+                username: baseerBuilderConfigs["postgreDb"]?.username,
+                password: baseerBuilderConfigs["postgreDb"]?.password,
+                port: baseerBuilderConfigs["postgreDb"]?.port,
+                host: baseerBuilderConfigs["postgreDb"]?.host,
+              });
+            } else if (node.databaseServer === "client-database") {
+              $("#container-database-databaseSever-baseer-builder").hide();
+              $("#container-database-databaseSever-client-database").show();
+
+              const influxConfigId = $("#node-input-influxDatabaseConfigs").val();
+              const pgConfigId = $("#node-input-postgreDatabaseConfigs").val();
+              const influxConfigNode = RED.nodes.node(influxConfigId);
+              const pgConfigNode = RED.nodes.node(pgConfigId);
+
+              if (influxConfigId !== "_ADD_" && influxConfigNode) {
+                updateConfigsValues("influxDb", {
+                  org: node?.influxOrg,
+                  token: influxConfigNode?.token,
+                  url: influxConfigNode?.url,
+                  port: influxConfigNode?.port,
+                });
+              }
+
+              if (pgConfigId !== "_ADD_" && pgConfigNode) {
+                updateConfigsValues("postgreDb", {
+                  username: pgConfigNode?.username,
+                  password: pgConfigNode?.password,
+                  port: pgConfigNode?.port,
+                  host: pgConfigNode?.host,
+                  database: pgConfigNode?.database,
+                });
+              }
+            }
+            if (node.databaseType === "influxdb") {
+              await updateInfluxConfigs(getBaseerBuilderConfigs("influxDb"));
+            } else if (node.databaseType === "postgresql") {
+              await updatePostgreConfigs(getBaseerBuilderConfigs("postgreDb"));
+            }
+          });
+
+
+          $("#node-input-databaseType").on("change", async function (event) {
+            node.databaseType = event.target.value;
+            if (node.databaseType === "postgresql") {
+              $(".container-database-databaseType-postgresql").show();
+              $(".container-database-databaseType-influxdb").hide();
+              let pgDatabaseConfigId = $("#node-input-postgreDatabase").val();
+              let pgTableConfigId = $("#node-input-postgreTable").val();
+              let pgDatabaseConfigNode = RED.nodes.node(pgDatabaseConfigId);
+              let pgTableConfigNode = RED.nodes.node(pgTableConfigId);
+              if (pgDatabaseConfigId !== "_ADD_") {
+                setBaseerBuilderConfigs("postgreDb", {
+                  database: pgDatabaseConfigNode?.database || "",
+                })
+              }
+              if (pgTableConfigId !== "_ADD_") {
+                setBaseerBuilderConfigs("postgreDb", {
+                  table: pgTableConfigNode?.tableName || "",
+                })
+              }
+
+              await updatePostgreConfigs(getBaseerBuilderConfigs("postgreDb"))
+            } else if (node.databaseType === "influxdb") {
+              $(".container-database-databaseType-postgresql").hide();
+              $(".container-database-databaseType-influxdb").show();
+              await updateInfluxConfigs(getBaseerBuilderConfigs("influxDb"))
+            }
+          });
+
+          /**
+          * 
+          * Influx Configs [start]
+          * 
+         */
+          $("#node-input-influxDatabaseConfigs").on("change", async function () {
+            let configId = $("#node-input-influxDatabaseConfigs").val();
+            let configNode = RED.nodes.node(configId);
+            if (configId !== "_ADD_") {
+              if (node.databaseServer !== "baseer-builder") {
+                if (node.databaseType === "influxdb") {
+                  setBaseerBuilderConfigs("influxDb", {
+                    url: configNode?.url || "",
+                    token: configNode?.token || "",
+                  })
+                  await updateInfluxConfigs(getBaseerBuilderConfigs("influxDb"))
+                }
+              }
+            }
+          });
+          $("#node-input-influxBucket").on("change", async function () {
+            let configId = $("#node-input-influxBucket").val();
+            let configNode = RED.nodes.node(configId);
+            if (configId !== "_ADD_") {
+
+              if (node.databaseType === "influxdb") {
+                setBaseerBuilderConfigs("influxDb", {
+                  bucket: configNode?.bucketName || "",
+                })
+                await updateInfluxConfigs(getBaseerBuilderConfigs("influxDb"))
+              }
+            }
+          });
+          $("#node-input-influxMeasurment").on("change", async function () {
+            let configId = $("#node-input-influxMeasurment").val();
+            let configNode = RED.nodes.node(configId);
+            if (configId !== "_ADD_") {
+              if (node.databaseType === "influxdb") {
+                setBaseerBuilderConfigs("influxDb", {
+                  measurment: configNode?.measurementName || "",
+                })
+                await updateInfluxConfigs(getBaseerBuilderConfigs("influxDb"))
+              }
+            }
+          });
+
+          /**
+           * 
+           * Influx Configs [end]
+           * 
+          */
+
+          /**
+          * 
+          * Postgre Configs [start]
+          * 
+         */
+          $("#node-input-postgreDatabaseConfigs").on("change", async function () {
+            let configId = $("#node-input-postgreDatabaseConfigs").val();
+            let configNode = RED.nodes.node(configId);
+            if (configId !== "_ADD_") {
+              if (node.databaseServer !== "baseer-builder") {
+                if (node.databaseType === "postgresql") {
+                  setBaseerBuilderConfigs("postgreDb", {
+                    username: configNode?.username || "",
+                    password: configNode?.password || "",
+                    port: Number(configNode?.port),
+                    host: configNode?.host || "",
+                    database: configNode?.database || "",
+                  })
+                  await updatePostgreConfigs(getBaseerBuilderConfigs("postgreDb"))
+                }
+              }
+            }
+          })
+          $("#node-input-postgreDatabase").on("change", async function () {
+            let configId = $("#node-input-postgreDatabase").val();
+            let configNode = RED.nodes.node(configId);
+            if (configId !== "_ADD_") {
+              if (node.databaseType === "postgresql") {
+                setBaseerBuilderConfigs("postgreDb", {
+                  database: configNode?.database || "",
+                })
+                await updatePostgreConfigs(getBaseerBuilderConfigs("postgreDb"))
+              }
+            }
+
+          })
+          $("#node-input-postgreTable").on("change", async function () {
+            let configId = $("#node-input-postgreTable").val();
+            let configNode = RED.nodes.node(configId);
+            if (configId !== "_ADD_") {
+              if (node.databaseType === "postgresql") {
+                setBaseerBuilderConfigs("postgreDb", {
+                  table: configNode?.tableName || "",
+                })
+                await updatePostgreConfigs(getBaseerBuilderConfigs("postgreDb"))
+              }
+            }
+          })
+
+          /**
+           * Postgre Configs [end]
+          */
+
+          /**
+           * 
+           * Redirections[start]
+           * 
+          */
+
+          setupDatabaseEventHandler("#node-input-btn-postgreDatabase-add", "pgDatabaseCreationConfigs");
+          setupDatabaseEventHandler("#node-input-btn-postgreDatabase-edit", "pgDatabaseCreationConfigs");
+
+          setupTableEventHandler("#node-input-btn-postgreTable-add", "pgDatabaseTableCreationConfigs");
+          setupTableEventHandler("#node-input-btn-postgreTable-edit", "pgDatabaseTableCreationConfigs");
+
+          setupInfluxBucketEventHandler("#node-input-btn-influxBucket-add", "influxBucketCreationConfigs");
+          setupInfluxBucketEventHandler("#node-input-btn-influxBucket-edit", "influxBucketCreationConfigs");
+
+          setupInfluxMeasurmentEventHandler("#node-input-btn-influxMeasurment-add", "influxMeasurementCreationConfigs");
+          setupInfluxMeasurmentEventHandler("#node-input-btn-influxMeasurment-edit", "influxMeasurementCreationConfigs");
+
+          $("#node-input-btn-pgDatabaseViewTableConfigs-add").on("click", function (event) {
+            const postgreDatabaseNodeId = $("#node-input-postgreDatabase").val();
+            const postgreTableNodeId = $("#node-input-postgreTable").val();
+            if (postgreDatabaseNodeId === "") {
+              RED.notify("Database not selected!", "error");
+            }
+            // if (postgreTableNodeId === "") {
+            //   RED.notify("Table not selected!", "error");
+            // }
+            var configTypeDef = RED.nodes.getType("pgDatabaseViewTableConfigs");
+            if (configTypeDef) {
+              configTypeDef.defaults.dbConfigs = {
+                ...getBaseerBuilderConfigs("postgreDb"),
+                database: (RED.nodes.node(postgreDatabaseNodeId) && RED.nodes.node(postgreDatabaseNodeId)?.database) || null,
+                table: (RED.nodes.node(postgreTableNodeId) && RED.nodes.node(postgreTableNodeId)?.tableName) || null,
+              };
+            }
+          });
+
+          $("#node-input-btn-influxDatabaseViewTableConfigs-add").on("click", function (event) {
+            // const influxOrg = $("#node-input-influxOrg").val();
+            const influxBucket = $("#node-input-influxBucket").val();
+            // if (influxOrg === "") {
+            //   RED.notify("Influx org is not selected!", "error");
+            // }
+            if (influxBucket === "") {
+              RED.notify("Influx bucket not selected!", "error");
+            }
+
+            var configTypeDef = RED.nodes.getType("influxDatabaseViewTableConfigs");
+            if (configTypeDef) {
+              configTypeDef.defaults.dbConfigs = {
+                ...getBaseerBuilderConfigs("influxDb"),
+                org: getBaseerBuilderConfigs("influxDb").org,
+                bucket: (RED.nodes.node(influxBucket) && RED.nodes.node(influxBucket).bucketName) || null,
+              };
+            }
+
+          });
+
+
+
+          /**
+           * 
+           * Redirections[End]
+           * 
+          */
+
+
+          async function updateInfluxConfigs(configs) {
+            try {
+              // const requiredFields = ["org", "bucket", "measurment"];
+              // for (const field of requiredFields) {
+              //   if (!configs?.[field]) {
+              //     console.error(`${field.charAt(0).toUpperCase() + field.slice(1)} is required in the configurations.`);
+              //     $("#container-table-payload-tables-main").hide();
+              //     return;
+              //   }
+              // }
+              // let fields = await getTableDetails("influxDb", {}, configs);
+              payloadKeys.nodes = payloadKeys.nodes.map((node) => ({
+                ...node,
+                columns: node?.keys?.map((el) => ({ id: uniqueId(), name: el.name, isTag: false })),
+                // columns: [...classifyInfluxMeasurmentKeysTags(fields)]?.filter((el) => (el.type !== 'tag'))?.map((el) => ({ id: uniqueId(), name: el.name })),
+              }));
+              updateInfluxPayloadTable(payloadKeys);
+            } catch (error) {
+              console.error("Error updating Influx configurations:", error);
+            }
+          }
+
+          async function updatePostgreConfigs(configs) {
+            try {
+              const payload = {
+                query: `
+                  SELECT column_name, data_type, character_maximum_length, is_nullable 
+                  FROM information_schema.columns 
+                  WHERE table_schema = 'public' AND table_name = $1`,
+                configs,
+                params: [configs.table],
+              };
+              const tableDetails = (await getTableDetails("postgreDb", payload)) || [];
+              const columnsByTable = tableDetails.map((el) => el.column_name);
+              payloadKeys.nodes = payloadKeys.nodes.map((node) => ({
+                ...node,
+                columns: [
+                  ...(node.keys?.map((el) => ({ id: uniqueId(), name: el.name })) || []),
+                  // ...(columnsByTable.map((el) => ({ id: uniqueId(), name: el })) || []),
+                ],
+                tableColumns: [...(columnsByTable.map((el) => ({ id: uniqueId(), name: el })) || [])]
+              }));
+              await updatePostgresPayloadTable(payloadKeys);
+
+            } catch (error) {
+              console.error("Error updating PostgreSQL configurations:", error);
+            }
+          }
+
+          /**
+           * 
+           * Display Payloads[start]
+           * 
+          */
+          function updateInfluxPayloadTable(payloadKeys) {
+            if (tempPayloads && tempPayloads.length > 0 && JSON.stringify(tempPayloads) !== JSON.stringify(node.payloadKeys)) {
+              payloadKeys = updateTablePayloads(tempPayloads, payloadKeys);
+            } else if (node.payloadKeys && node.payloadKeys.length > 0) {
+              payloadKeys = updateTablePayloads(node.payloadKeys, payloadKeys);
+            }
+
+            $(document).ready(function () {
+              const selectedValues = {};
+              function renderTables(payload) {
+                const $container = $("#container-table-payload-tables");
+                $container.empty();
+
+                payload.nodes.forEach((node) => {
+                  if (node) {
+                    const tableId = `table-${node.id}`;
+                    const tableHtml = `
+                      <div class="container-table-payload-table-container" id="container-${tableId}">
+                        <div class="container-table-payload-table-header">
+                          <h3 style="font-size: 15px;">
+                            <i class="fa fa-table"></i> ${node.name || node.id} Payloads
+                          </h3>
+                          <div>
+                            <button data-table="${tableId}" class="container-table-add-column red-ui-button red-ui-button-small">
+                              <i class="fa fa-plus"></i> Add
+                            </button>
+                          </div>
+                        </div>
+                        <table id="${tableId}-comp" class="container-table-payload-payload-table">
+                          <thead>
+                            <tr>
+                              <th>Column</th>
+                              <th>Value</th>
+                              <th>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody id="${tableId}-data"></tbody>
+                        </table>
+                        <div id="${tableId}-container-table-payload-no-data-message" class="container-table-payload-no-data-message">
+                          No data available
+                        </div>
+                      </div>
+                    `;
+                    $container.append(tableHtml);
+                    renderTableRows(node, tableId);
+                  }
+                });
+              }
+
+              function getRowHtml(tableId, columnId, columnName, keys, isTag = false) {
+                const highlightStyle = isTag ? 'background-color: #e9e9e9;' : '';
+                const markTagText = isTag ? 'Mark as field' : 'Mark as tag';
+                return `
+                    <tr style="${highlightStyle}" isTag="${isTag}">
+                      <td>
+                        <input 
+                          type="text" 
+                          class="column-name-autocomplete" 
+                          id="column-name-autocomplete-${columnId}" 
+                          data-table="${tableId}" 
+                          data-key="${columnId}" 
+                          value="${columnName}" 
+                          placeholder="Enter column name"
+                        />
+                      </td>
+                      <td>
+                        <div style="display: flex; flex-direction: row; justify-content: center; align-items: center;">
+                          <select class="action-dropdown-value" data-table="${tableId}" data-key="${columnId}" style="margin-right: 5px;">
+                            <option value="">Select Value</option>
+                            ${(() => {
+                    function populateOptions(keys, parentKey = "") {
+                      return keys.map((key) => {
+                        const fullKey = parentKey ? `${parentKey}.${key.key}` : key.key;
+
+                        if (key.subKeys) {
+                          return `
+                                          <optgroup label="${fullKey}">
+                                            ${populateOptions(key.subKeys, fullKey)}
+                                          </optgroup>
+                                        `;
+                        } else {
+                          return `<option value="${fullKey}">${fullKey}</option>`;
+                        }
+                      }).join("");
+                    }
+                    return populateOptions(keys);
+                  })()}
+                            <option value="custom">Custom</option>
+                          </select>
+                          <div id="node-input-property-container-${columnId}" class="node-input-prop-property-value" style="display: none;"></div>
+                          <div id="node-input-property-container-keyType-${columnId}" class="node-input-prop-property-keyType" data-key="${keys[0].type}" style="display: none;"></div>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="influx-action-dropdown-main">
+                          <button class="influx-action-dropdown-button red-ui-button red-ui-button-small">
+                            <i class="fa fa-ellipsis-h fa-2x"></i>
+                          </button>
+                          <div class="influx-action-dropdown-content">
+                            <a href="#" class="delete-row-button">Delete Row</a>
+                            <a href="#" class="mark-tag-row-button">${markTagText}</a>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  `;
+              }
+
+              $(document).off("click", ".influx-action-dropdown-button").on("click", ".influx-action-dropdown-button", function (event) {
+                var $dropdownContent = $(this).closest('.influx-action-dropdown-main').find('.influx-action-dropdown-content');
+                $dropdownContent.toggle();
+              });
+              $(document).off("click", '.influx-action-dropdown-content a, .influx-action-dropdown-content button').on('click', '.influx-action-dropdown-content a, .influx-action-dropdown-content button', function (event) {
+                $('.influx-action-dropdown-content').hide();
+              });
+
+              $(document).on('click', function (event) {
+                if (!$(event.target).closest('.influx-action-dropdown-main').length) {
+                  $('.influx-action-dropdown-content').hide();
+                }
+              });
+
+              function renderTableRows(node, tableId) {
+                const $dataContainer = $(`#${tableId}-data`);
+                node.columns.forEach((column) => {
+                  const rowHtml = getRowHtml(tableId, column.id, column.name, node.keys, column.isTag);
+                  $dataContainer.append(rowHtml);
+                  const selectedValue = column.name || '';
+                  if (selectedValue) {
+                    selectDropdownValueInRow(tableId, column.id, selectedValue, column);
+                  }
+                  initializeAutocomplete(tableId, column.id, node,);
+                  handleDropdownChange(tableId, column.id, column);
+                  setupAutoSave(tableId, column.id);
+                });
+              }
+
+              function selectDropdownValueInRow(tableId, columnId, selectedValue, column) {
+                const $dropdowns = $(`#${tableId}-data .action-dropdown-value[data-key="${columnId}"]`);
+
+                selectedValue = column.keyName || selectedValue;
+                $dropdowns.each(function () {
+                  const $dropdown = $(this);
+                  const $options = $dropdown.find('option');
+                  setTimeout(() => {
+                    let valueFound = false;
+                    $options.each(function () {
+                      const optionValue = $(this).val();
+                      if (optionValue === selectedValue) {
+                        $(this).prop('selected', true);
+                        valueFound = true;
+                      }
+                    });
+                    if (!valueFound) {
+                      const $selectValueOption = $dropdown.find('option:first');
+                      $selectValueOption.prop('selected', true);
+                    }
+                    $dropdown.trigger('change');
+                  }, 0);
+                });
+              }
+              function handleDropdownChange(tableId, columnId, column) {
+                const $dropdown = $(`#${tableId}-data .action-dropdown-value[data-key="${columnId}"]`);
+                const $container = $(`#node-input-property-container-${columnId}`);
+                const inputStates = {};
+                $dropdown.off("change").on("change", function () {
+                  if ($(this).val() === "custom") {
+                    let selectedValue = column?.staticValue || "";
+                    let selectedValueType = column?.staticValueType || "str";
+                    $container.show().empty();
+                    const row = $('<div>', { class: "node-input-prop-row" }).css("display", "flex").appendTo($container);
+                    const propertyValue = $('<input>', {
+                      type: "text",
+                      class: "node-input-prop-property-value",
+                      value: selectedValue
+                    }).appendTo(row);
+                    propertyValue.typedInput({
+                      default: "str",
+                      // types: ["str", "num", "bool", "bin", "jsonata", "date"],
+                      types: ctmTypedFieldTypes,
+                      value: (selectedValueType === "date" && selectedValue === "millis") ? "" : selectedValue,
+                      type: selectedValueType,
+                    });
+                    propertyValue.typedInput('type', selectedValueType);
+                    propertyValue.typedInput('value', (selectedValueType == "date" && selectedValue == "millis") ? "" : selectedValue);
+                    propertyValue.on("change", function (event) {
+                      autoSave();
+                    });
+                  } else {
+                    $container.hide().empty();
+                  }
+
+                  autoSave();
+                });
+              }
+
+              function initializeAutocomplete(tableId, columnId, node) {
+                $(`#column-name-autocomplete-${columnId}`).autocomplete({
+                  source: function (request, response) {
+                    const searchTerm = request.term.toLowerCase();
+                    const matches = node.columns
+                      .map((el) => el.name)
+                      .filter((name) => name.toLowerCase().includes(searchTerm))
+                      .map((value) => ({ value, label: value }));
+
+                    if (matches.length === 0) {
+                      matches.push({ value: request.term, label: `Add new "${request.term}"`, isCreateOption: true });
+                    }
+                    response(matches);
+                  },
+                  minLength: 1,
+                  select: async function (event, ui) {
+                    autoSave()
+                  },
+                  focus: () => false,
+                  open: function () {
+                    $(this).autocomplete("widget").css({ "max-height": "200px", "overflow-y": "auto" });
+                  },
+                });
+
+                $(`#column-name-autocomplete-${columnId}`).on("focus", function () {
+                  $(this).autocomplete("search", "");
+                });
+
+              }
+              $(document).off("click", ".container-table-add-column").on("click", ".container-table-add-column", function () {
+                const tableId = $(this).data("table");
+                const $dataContainer = $(`#${tableId}-data`);
+                const newColumnId = `column-${Date.now()}`;
+                const node = payloadKeys.nodes.find((node) => `table-${node.id}` === tableId);
+                const rowHtml = getRowHtml(tableId, newColumnId, "", node ? node.keys : []);
+                $dataContainer.append(rowHtml);
+
+                initializeAutocomplete(tableId, newColumnId, node || { columns: [] });
+                handleDropdownChange(tableId, newColumnId);
+              });
+              $(document).off("click", ".delete-row-button").on("click", ".delete-row-button", function () {
+                $(this).closest("tr").remove();
+                autoSave();
+              });
+
+              $(document).off("click", ".mark-tag-row-button").on("click", ".mark-tag-row-button", function () {
+                const $row = $(this).closest("tr");
+                const $button = $(this);
+                const isTag = $row.attr("isTag") === "true";
+                if (isTag) {
+                  $row.attr("isTag", "false");
+                  $row.css("background-color", "");
+                  $button.text("Mark as tag");
+                } else {
+                  $row.attr("isTag", "true");
+                  $row.css("background-color", "#e9e9e9");
+                  $button.text("Mark as field");
+                }
+                autoSave();
+              });
+
+              function setupAutoSave(tableId, columnId) {
+                $(`#column-name-autocomplete-${columnId}`).on("input", autoSave);
+                $(`#${tableId}-data .action-dropdown-value[data-key="${columnId}"]`).on("change", autoSave);
+              }
+              function getCurrentTypedInputState(columnId) {
+                const $input = $(`#node-input-property-container-${columnId} input.node-input-prop-property-value`);
+                if ($input.length === 0) {
+                  console.warn(`No input found for column ID: ${columnId}`);
+                  return null;
+                }
+                try {
+                  const value = $input.val();
+                  const type = $input.typedInput('type');
+                  return {
+                    value: value,
+                    type: type
+                  };
+                } catch (error) {
+                  console.error(`Error retrieving state for column ${columnId}:`, error);
+                  return null;
+                }
+              }
+              function autoSave() {
+                const selectedData = [];
+
+                $(".container-table-payload-table-container").each(function () {
+                  const tableId = $(this).attr("id").replace("container-", "");
+
+                  $(`#${tableId}-data tr`).each(function () {
+                    const $row = $(this);
+                    const columnName = $row.find(".column-name-autocomplete").val() || "";
+                    const columnId = $row.find(".column-name-autocomplete").data("key") || "";
+                    const valueType = $row.find(".action-dropdown-value").val() || "";
+                    const key = $row.find(".action-dropdown-value").data("key") || "";
+                    const keyName = valueType;
+                    const isTag = $row.attr("isTag") === "true";
+                    // const staticValue =
+                    //   valueType === "custom"
+                    //     ? $row.find(`#node-input-property-container-${columnId} input.node-input-prop-property-value`).val() || null
+                    //     : null;
+                    const staticValue = valueType === "custom" ? getCurrentTypedInputState(columnId)?.value || null : null;
+                    const staticValueType = valueType === "custom" ? getCurrentTypedInputState(columnId)?.type || null : null;
+                    let parentKeyArray = keyName.split(".");
+                    let parentKeyObj = payloadKeys?.nodes?.find((node) => `table-${node.id}` === tableId)?.keys?.find((key) => key.name === parentKeyArray?.[0]);
+                    selectedData.push({
+                      node: tableId.replace("table-", ""),
+                      columnId: columnId,
+                      column: columnName,
+                      key: key,
+                      keyName: keyName || "",
+                      isTag: isTag,
+                      keyType: parentKeyObj?.type || "",
+                      subKeyName: parentKeyArray?.[1] || null,
+                      subKeyType: parentKeyObj?.subKeys?.find((el) => el.key === parentKeyArray?.[1])?.type || null,
+                      valueType: valueType || null,
+                      staticValue: (staticValueType == "date" && staticValue == null) ? "millis" : staticValue || null,
+                      staticValueType: staticValueType || null
+                    });
+                  });
+                });
+                tempPayloads = selectedData;
+              }
+              if (
+                payloadKeys.nodes.length > 0 &&
+                payloadKeys.nodes.some((node) => node.keys && node.keys.length > 0)
+              ) {
+                $("#container-table-payload-tables-main").show();
+                renderTables(payloadKeys);
+              } else {
+                $("#container-table-payload-save-all").hide();
+                $("#container-table-payload-tables-main").hide();
+              }
+            });
+          }
+
+          function updatePostgresPayloadTable(payloadKeys) {
+            if (tempPayloads && tempPayloads.length > 0 && JSON.stringify(tempPayloads) !== JSON.stringify(node.payloadKeys)) {
+              payloadKeys = updateTablePayloads(tempPayloads, payloadKeys);
+            } else if (node.payloadKeys && node.payloadKeys.length > 0) {
+              payloadKeys = updateTablePayloads(node.payloadKeys, payloadKeys);
+            }
+            $(document).ready(function () {
+              const selectedValues = {};
+              function renderTables(payload) {
+                const $container = $("#container-table-payload-tables");
+                $container.empty();
+
+                payload.nodes.forEach((node) => {
+                  if (node) {
+                    const tableId = `table-${node.id}`;
+                    const tableHtml = `
+                      <div class="container-table-payload-table-container" id="container-${tableId}">
+                        <div class="container-table-payload-table-header">
+                          <h3 style="font-size: 15px;">
+                            <i class="fa fa-table"></i> ${node.name || node.id} Payloads
+                          </h3>
+                          <div>
+                            <button data-table="${tableId}" class="container-table-add-column red-ui-button red-ui-button-small">
+                              <i class="fa fa-plus"></i> Add
+                            </button>
+                          </div>
+                        </div>
+                        <table id="${tableId}-comp" class="container-table-payload-payload-table">
+                          <thead>
+                            <tr>
+                              <th>Column</th>
+                              <th>Value</th>
+                              <th>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody id="${tableId}-data"></tbody>
+                        </table>
+                        <div id="${tableId}-container-table-payload-no-data-message" class="container-table-payload-no-data-message">
+                          No data available
+                        </div>
+                      </div>
+                    `;
+                    $container.append(tableHtml);
+                    renderTableRows(node, tableId);
+                  }
+                });
+              }
+
+              function getRowHtml(tableId, columnId, columnName, keys, newPgColumn, columnData = {}) {
+                return `
+                      <tr id="table-main-row-${tableId}-column-${columnId}">
+                          <td>
+                          ${newPgColumn
+                    ? `<div id="column-name-newcolumn-${columnId}"></div>`
+                    : `
+                              <input
+                                type="text"
+                                class="column-name-autocomplete"
+                                id="column-name-autocomplete-${columnId}"
+                                data-table="${tableId}"
+                                data-key="${columnId}"
+                                data-is-new-column="${columnData?.isNewColumn || false}"
+                                value="${columnName || ''}"
+                                data-column-type="${columnData?.type || ""}"
+                                data-is-primary="${columnData?.isPrimary || false}"
+                                data-is-foreign="${columnData?.isForeign || false}"
+                                data-references-table="${columnData?.referencesTable || ""}"
+                                data-references-column="${columnData?.referencesColumn || ""}"
+                                placeholder="Enter column name"
+                              />
+                            `
+                  }
+                                </td>
+                                <td>
+                                  <div style="display: flex; flex-direction: row; justify-content: center; align-items: center;">
+                                  <select class="action-dropdown-value" data-table="${tableId}" data-key="${columnId}" style="margin-right: 5px;">
+                                      <option value="">Select Value</option>
+                                      ${keys.map((key) =>
+                    `<option value="${key.name}" data-key="${key.type}">${key.name}</option>`
+                  ).join("")}
+                            <option value="custom">Custom</option>
+                          </select>
+                          <div id="node-input-property-container-${columnId}" class="node-input-prop-property-value" style="display: none;"></div>
+                          <div id="node-input-property-container-keyType-${columnId}" class="node-input-prop-property-keyType" data-key="${keys[0]?.type}" style="display: none;"></div>
+                        </div>
+                      </td>
+                      <td>
+                        <button class="delete-row-button red-ui-button red-ui-button-small" data-table="${tableId}" data-key="${columnId}">
+                          <i class="fa fa-minus"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  `;
+              }
+              function renderTableRows(node, tableId) {
+                const $dataContainer = $(`#${tableId}-data`);
+                node.columns.forEach((column) => {
+                  const rowHtml = getRowHtml(tableId, column.id, column.name, node.keys);
+                  $dataContainer.append(rowHtml);
+                  const selectedValue = column.name || '';
+                  if (selectedValue) {
+                    selectDropdownValueInRow(tableId, column.id, selectedValue, column);
+                  }
+                  initializeAutocomplete(tableId, column.id, node,);
+                  handleDropdownChange(tableId, column.id, column);
+                  setupAutoSave(tableId, column.id);
+                });
+              }
+
+
+              function selectDropdownValueInRow(tableId, columnId, selectedValue, column) {
+                const $dropdowns = $(`#${tableId}-data .action-dropdown-value[data-key="${columnId}"]`);
+
+                selectedValue = column.keyName || selectedValue;
+                $dropdowns.each(function () {
+                  const $dropdown = $(this);
+                  const $options = $dropdown.find('option');
+                  setTimeout(() => {
+                    let valueFound = false;
+                    $options.each(function () {
+                      const optionValue = $(this).val();
+                      if (optionValue === selectedValue) {
+                        $(this).prop('selected', true);
+                        valueFound = true;
+                      }
+                    });
+                    if (!valueFound) {
+                      const $selectValueOption = $dropdown.find('option:first');
+                      $selectValueOption.prop('selected', true);
+                    }
+                    $dropdown.trigger('change');
+                  }, 0);
+                });
+              }
+              function handleDropdownChange(tableId, columnId, column) {
+                const $dropdown = $(`#${tableId}-data .action-dropdown-value[data-key="${columnId}"]`);
+                const $container = $(`#node-input-property-container-${columnId}`);
+                const inputStates = {};
+                $dropdown.off("change").on("change", function () {
+                  const columnElement = $(`#column-name-autocomplete-${columnId}`);
+                  const isNewColumn = columnElement.data("is-new-column") || false;
+
+                  const columnOptions = {
+                    name: columnElement.val() || '',
+                    type: columnElement.data("column-type") || '',
+                    isPrimary: columnElement.data("is-primary") || false,
+                    isForeign: columnElement.data("is-foreign") || false,
+                    referencesTable: columnElement.data("references-table") || '',
+                    referencesColumn: columnElement.data("references-column") || '',
+                    isNullable: true
+                  };
+
+                  if (columnElement.length) {
+                    columnElement
+                      .attr({
+                        "data-is-new-column": `${isNewColumn}`,
+                        "data-column-type": columnOptions.type,
+                        "data-is-primary": `${columnOptions.isPrimary}`,
+                        "data-is-foreign": `${columnOptions.isForeign}`,
+                        "data-references-table": columnOptions.referencesTable,
+                        "data-references-column": columnOptions.referencesColumn,
+                      });
+                  }
+                  if ($(this).val() === "custom") {
+                    let selectedValue = column?.staticValue || "";
+                    let selectedValueType = column?.staticValueType || "str";
+                    $container.show().empty();
+                    const row = $('<div>', { class: "node-input-prop-row" }).css("display", "flex").appendTo($container);
+                    const propertyValue = $('<input>', {
+                      type: "text",
+                      class: "node-input-prop-property-value",
+                      value: selectedValue
+                    }).appendTo(row);
+                    propertyValue.typedInput({
+                      default: "str",
+                      types: ctmTypedFieldTypes,
+                      value: (selectedValueType === "date" && selectedValue === "millis") ? "" : selectedValue,
+                      type: selectedValueType,
+                    });
+                    propertyValue.typedInput('type', selectedValueType);
+                    propertyValue.typedInput('value', (selectedValueType == "date" && selectedValue == "millis") ? "" : selectedValue);
+                    propertyValue.on("change", function (event) {
+                      autoSave();
+                    });
+                  } else {
+                    $container.hide().empty();
+                  }
+
+                  autoSave();
+                });
+              }
+
+              function initializeAutocomplete(tableId, columnId, node) {
+                $(`#column-name-autocomplete-${columnId}`).autocomplete({
+                  source: function (request, response) {
+                    const searchTerm = request.term.toLowerCase();
+                    const matches = [...node.columns, ...node.tableColumns]
+                      .map((el) => el.name)
+                      .filter((name) => name?.toLowerCase()?.includes(searchTerm))
+                      .map((value) => ({ value, label: value }));
+
+                    if (matches.length === 0) {
+                      matches.push({ value: request.term, label: `Add new "${request.term}"`, isCreateOption: true });
+                    }
+                    response(matches);
+                  },
+                  minLength: 1,
+                  select: async function (event, ui) {
+                    const item = ui.item;
+                    if (item.isCreateOption) {
+                      const newValue = item.value.replace('Add new "', '').replace('"', '');
+                      $(`#column-name-autocomplete-${columnId}`).val(newValue)
+                      try {
+                        const $dataContainer = $(`#${tableId}-data`);
+                        const newColumnId = `column-${Date.now()}`;
+                        const node = payloadKeys.nodes.find((node) => `table-${node.id}` === tableId);
+                        let newPgColumn = true;
+
+                        let configs = getBaseerBuilderConfigs("postgreDb");
+                        let tableLists = await getTableLists(configs) || [];
+                        const columnsToUse = {
+                          name: newValue,
+                          type: 'VARCHAR(255)',
+                          isPrimary: false,
+                          isForeign: false,
+                          referencesTable: '',
+                          referencesColumn: '',
+                          isNullable: true
+                        };
+                        const $rowElement = $(`#table-main-row-${tableId}-column-${columnId}`);
+                        const rowHtml = getRowHtml(tableId, columnId, newValue, node ? node.keys : [], newPgColumn);
+                        $rowElement.replaceWith(rowHtml);
+
+                        async function updateTableCallback(columnName, columnData) {
+                          const $rowElement = $(`#table-main-row-${tableId}-column-${columnId}`);
+                          const updatedRowHtml = getRowHtml(tableId, columnId, columnName, node ? node.keys : [], false, { ...columnData });
+                          $rowElement.replaceWith(updatedRowHtml);
+                          initializeAutocomplete(tableId, columnId, node || { columns: [] });
+                          handleDropdownChange(tableId, columnId);
+                          autoSave();
+                        }
+
+                        await createColumnRow(columnsToUse, tableLists, $(`#column-name-newcolumn-${columnId}`), configs, updateTableCallback);
+
+                        initializeAutocomplete(tableId, columnId, node || { columns: [] });
+                        handleDropdownChange(tableId, columnId);
+
+                      } catch (error) {
+                        console.error("Error fetching table details:", error);
+                      }
+
+                    } else {
+                      $(`#column-name-autocomplete-${columnId}`).val(item.value);
+                    }
+                    autoSave()
+                  },
+                  focus: () => false,
+                  open: function () {
+                    $(this).autocomplete("widget").css({ "max-height": "200px", "overflow-y": "auto" });
+                  },
+                });
+
+                $(`#column-name-autocomplete-${columnId}`).on("focus", function () {
+                  $(this).autocomplete("search", "");
+                });
+
+                $(`#column-name-autocomplete-${columnId}`).val()
+
+              }
+              $(document).off("click", ".container-table-add-column").on("click", ".container-table-add-column", function () {
+                const tableId = $(this).data("table");
+                const $dataContainer = $(`#${tableId}-data`);
+                const newColumnId = `column-${Date.now()}`;
+                const node = payloadKeys.nodes.find((node) => `table-${node.id}` === tableId);
+                const rowHtml = getRowHtml(tableId, newColumnId, "", node ? node.keys : []);
+                $dataContainer.append(rowHtml);
+
+                initializeAutocomplete(tableId, newColumnId, node || { columns: [] });
+                handleDropdownChange(tableId, newColumnId);
+              });
+              $(document).off("click", ".delete-row-button").on("click", ".delete-row-button", function () {
+                $(this).closest("tr").remove();
+                autoSave();
+              });
+
+              function setupAutoSave(tableId, columnId) {
+                $(`#column-name-autocomplete-${columnId}`).on("input", autoSave);
+                $(`#${tableId}-data .action-dropdown-value[data-key="${columnId}"]`).on("change", autoSave);
+              }
+              function getCurrentTypedInputState(columnId) {
+                const $input = $(`#node-input-property-container-${columnId} input.node-input-prop-property-value`);
+                if ($input.length === 0) {
+                  console.warn(`No input found for column ID: ${columnId}`);
+                  return null;
+                }
+                try {
+                  const value = $input.val();
+                  const type = $input.typedInput('type');
+                  return {
+                    value: value,
+                    type: type
+                  };
+                } catch (error) {
+                  console.error(`Error retrieving state for column ${columnId}:`, error);
+                  return null;
+                }
+              }
+              function autoSave() {
+                const selectedData = [];
+
+                $(".container-table-payload-table-container").each(function () {
+                  const tableId = $(this).attr("id").replace("container-", "");
+
+                  $(`#${tableId}-data tr`).each(function () {
+                    const $row = $(this);
+                    const columnName = $row.find(".column-name-autocomplete").val() || "";
+                    const columnId = $row.find(".column-name-autocomplete").data("key") || "";
+                    const valueType = $row.find(".action-dropdown-value").val() || "";
+                    const key = $row.find(".action-dropdown-value").data("key") || "";
+                    const keyName = valueType;
+                    const staticValue = valueType === "custom" ? getCurrentTypedInputState(columnId)?.value || null : null;
+                    const staticValueType = valueType === "custom" ? getCurrentTypedInputState(columnId)?.type || null : null;
+                    const columnElement = $row.find(".column-name-autocomplete")
+
+                    let isNewColumn = columnElement.data("is-new-column") || false;
+
+                    const columnOptions = {
+                      name: columnElement.val() || '',
+                      type: columnElement.data("column-type") || '',
+                      isPrimary: columnElement.data("is-primary") || false,
+                      isForeign: columnElement.data("is-foreign") || false,
+                      referencesTable: columnElement.data("references-table") || '',
+                      referencesColumn: columnElement.data("references-column") || '',
+                      isNullable: true
+                    };
+
+                    selectedData.push({
+                      node: tableId.replace("table-", ""),
+                      columnId: columnId,
+                      column: columnName,
+                      key: key,
+                      keyName: keyName || "",
+                      keyType: payloadKeys?.nodes?.find((node) => `table-${node.id}` === tableId)?.keys?.find((key) => keyName === key.name)?.type || "",
+                      valueType: valueType || null,
+                      staticValue: (staticValueType == "date" && staticValue == null) ? "millis" : staticValue || null,
+                      staticValueType: staticValueType || null,
+                      isNewColumn: isNewColumn,
+                      columnOptions: columnOptions
+                    });
+                  });
+                });
+                tempPayloads = selectedData;
+              }
+              if (
+                payloadKeys.nodes.length > 0 &&
+                payloadKeys.nodes.some((node) => node.keys && node.keys.length > 0)
+              ) {
+                $("#container-table-payload-tables-main").show();
+                renderTables(payloadKeys);
+              } else {
+                $("#container-table-payload-save-all").hide();
+                $("#container-table-payload-tables-main").hide();
+              }
+            });
+          }
+
+
+          /**
+          * 
+          * Display Payloads[end]
+          * 
+          */
+        },
+        oneditsave: async function () {
+          this.payloadKeys = tempPayloads;
+          $("#node-input-payloadKeys").val(tempPayloads)
+
+          if (this.databaseType === "postgresql") {
+            const columnDataArray = this?.payloadKeys?.map((el) => {
+              return {
+                name: el.column || "",
+                type: mapKeyType(el?.keyType),
+                isPrimary: el?.columnOptions?.isPrimary || false,
+                isForeign: el?.columnOptions?.isForeign || false,
+                referencesTable: el?.columnOptions?.referencesTable || "",
+                referencesColumn: el?.columnOptions?.referencesColumn || "",
+                isNullable: el?.columnOptions?.isNullable || true,
+              }
+            });
+            const configs = getBaseerBuilderConfigs("postgreDb");
+
+            if (!configs.table) {
+              RED.notify("Table not selected!", "error");
+              return;
+            }
+            if (!configs.database) {
+              RED.notify("Database not selected!", "error");
+              return;
+            }
+
+            async function getAllColumns() {
+              const payload = {
+                query: `
+                  SELECT column_name, data_type, character_maximum_length, is_nullable 
+                  FROM information_schema.columns 
+                  WHERE table_schema = 'public' AND table_name = $1`,
+                configs,
+                params: [configs.table],
+              };
+              return (await getTableDetails("postgreDb", payload)) || [];
+            }
+
+            const checkTableExists = async (tableName) => {
+              const checkQuery = `
+                  SELECT EXISTS (
+                    SELECT 1 
+                    FROM information_schema.tables 
+                    WHERE table_name = $1
+                  );
+                `;
+              try {
+                const result = await updatePostgreTable({
+                  query: checkQuery,
+                  configs,
+                  params: [tableName]
+                });
+                return result[0].exists;
+              } catch (err) {
+                console.error('Error checking table existence:', err);
+                throw err;
+              }
+            };
+
+            const addColumns = async () => {
+              const queries = [];
+              const columnExists = (await getAllColumns() || []).map(el => el.column_name);
+
+              for (const columnData of columnDataArray) {
+                if (!columnExists.includes(columnData.name?.toLowerCase())) {
+                  const nullableClause = columnData.isNullable ? 'NULL' : 'NOT NULL';
+
+                  let query = `
+                        ALTER TABLE ${configs.table} 
+                        ADD COLUMN ${columnData.name} ${columnData.type} 
+                        ${columnData.isNullable ? 'NULL' : 'DEFAULT ${columnData.default || 0}'};
+                      `;
+
+                  queries.push(query);
+
+                  if (!columnData.isNullable) {
+                    let updateQuery = `
+                        UPDATE ${configs.table}
+                        SET ${columnData.name} = ${columnData.default || 0}
+                        WHERE ${columnData.name} IS NULL;
+                      `;
+                    queries.push(updateQuery);
+
+                    let alterNotNullQuery = `
+                        ALTER TABLE ${configs.table}
+                        ALTER COLUMN ${columnData.name} SET NOT NULL;
+                      `;
+                    queries.push(alterNotNullQuery);
+                  }
+
+                  if (columnData.isPrimary) {
+                    let updatePKQuery = `
+                      UPDATE ${configs.table}
+                      SET ${columnData.name} = gen_random_uuid() -- Example for UUID
+                      WHERE ${columnData.name} IS NULL;
+                    `;
+                    queries.push(updatePKQuery);
+
+                    let pkQuery = `
+                        ALTER TABLE ${configs.table}
+                        ADD CONSTRAINT ${configs.table}_${columnData.name}_pk 
+                        PRIMARY KEY (${columnData.name});
+                      `;
+                    queries.push(pkQuery);
+                  }
+
+                  if (columnData.isForeign && columnData.referencesTable && columnData.referencesColumn) {
+                    let fkQuery = `
+                      ALTER TABLE ${configs.table}
+                      ADD CONSTRAINT ${configs.table}_${columnData.name}_fk
+                      FOREIGN KEY (${columnData.name})
+                      REFERENCES ${columnData.referencesTable} (${columnData.referencesColumn})
+                      ON DELETE CASCADE;
+                    `;
+                    queries.push(fkQuery);
+                  }
+                }
+              }
+              return queries;
+            };
+
+            const queries = await addColumns();
+
+            const tableExists = await checkTableExists(configs.table);
+            if (!tableExists) {
+              try {
+                const payload = {
+                  tableName: configs.table,
+                  columns: columnDataArray,
+                  configs: configs
+                };
+                await createTablesFromDatabase(payload).then((res) => {
+                  RED.notify(`${res}`, "success");
+                }).catch((err) => {
+                  RED.notify(`${err.statusText}`, "error");
+                });
+              } catch (err) {
+                console.error(`Error while creating table: ${err}`);
+                RED.notify("Error while creating table: " + err?.message, "error");
+                return;
+              }
+            } else {
+              try {
+                const queries = await addColumns();
+                if (queries.length > 0) {
+                  const payload = {
+                    query: queries.join(' '),
+                    configs: configs,
+                    params: []
+                  };
+                  updatePostgreTable(payload)
+                    .then((res) => {
+                      RED.notify("Successfully created columns", "success");
+                    })
+                    .catch((err) => {
+                      console.error("Error while updating table", err);
+                      RED.notify("Error while updating table: " + err?.responseJSON?.message, "error");
+                    });
+                } else {
+                  console.log("No new columns to create.");
+                }
+              } catch (err) {
+                console.error("Error while checking/adding columns:", err);
+                RED.notify("Error while checking/adding columns: " + err?.message, "error");
+              }
+            }
+          }
+
+          console.log(this, "Final Saved!")
+        }
+      });
+    })();
+  </script>
+
+  <script type="text/html" data-help-name="database">
+    <p>The simplest of all Nodes to implement as an introductory example.<br/></p>
+  </script>
+
+  <script type="text/html" data-template-name="database">
+
+    <div class="form-row">
+      <label for="node-input-name"><i class="fa fa-tag"></i> Name </label>
+      <input type="text" id="node-input-name" data-i18n="Name" placeholder="Name">
+  </div>
+
+  <div class="form-row">
+    <label for="node-input-databaseServer"><i class="fa fa-server"></i> Hosting </label>
+    <select type="text" id="node-input-databaseServer" style="width: 70%;">
+      <option value="">Select hosting</option>
+      <option value="baseer-builder"> Cloud </option>
+      <option value="client-database"> Local </option>
+    </select>
+  </div>
+
+  <div class="form-row">
+    <label for="node-input-databaseType"><i class="fa fa-sitemap"></i> Database Type </label>
+    <select type="text" id="node-input-databaseType" style="width: 70%;">
+      <option value="">Select database</option>
+      <option value="postgresql"> PostgreSQL </option>
+      <option value="influxdb">InfluxDB</option>
+    </select>
+  </div>
+  <div id="container-database-databaseSever-client-database">
+    <div class="container-database-databaseType-postgresql">
+      <div class="form-row" id="database-custom-server-postgreDatabaseConfigs">
+        <label for="node-input-postgreDatabaseConfigs"><i class="fa fa-server"></i> Config </label>
+        <input type="config" id="node-input-postgreDatabaseConfigs" data-config="postgreDatabaseConfigs">
+      </div>
+    </div>
+  
+    <div class="container-database-databaseType-influxdb">
+      <div class="form-row" id="database-custom-server-influxDatabaseConfigs">
+        <label for="node-input-influxDatabaseConfigs"><i class="fa fa-server"></i> Config </label>
+        <input type="text" id="node-input-influxDatabaseConfigs">
+      </div>
+
+      <div class="form-row">
+        <label for="node-input-influxOrg"><i class="fa fa-sitemap"></i> Org </label>
+        <input type="text" id="node-input-influxOrg" data-i18n="org" placeholder="Org">
+      </div>
+
+    </div>
+  </div>
+  <div class="container-database-databaseSever-baseer-builder-extended">
+    <div class="container-database-databaseType-postgresql">
+  
+      <div class="form-row database-custom-server-postgreDatabase">
+        <label for="node-input-postgreDatabase"><i class="fa fa-database"></i> Database </label>
+        <input type="text" id="node-input-postgreDatabase">
+      </div>
+  
+      <div class="form-row">
+        <label for="node-input-postgreTable"><i class="fa fa-table"></i> Table </label>
+        <input type="text" id="node-input-postgreTable" data-i18n="table" placeholder="Table">
+      </div>
+  
+      <div class="form-row database-custom-server-pgDatabaseViewTableConfigs">
+        <label for="node-input-pgDatabaseViewTableConfigs"><i class="fa fa-table"></i> View Data </label>
+        <input type="text" id="node-input-pgDatabaseViewTableConfigs">
+      </div>
+  
+    </div>
+    <div class="container-database-databaseType-influxdb">
+     
+      <div class="form-row database-custom-server-influxBuckets">
+        <label for="node-input-influxBucket"><i class="fa fa-database"></i> Bucket </label>
+        <input type="text" id="node-input-influxBucket">
+      </div>
+
+      <div class="form-row database-custom-server-influxMeasurment">
+        <label for="node-input-influxMeasurment"><i class="fa fa-table"></i> Measurement </label>
+        <input type="text" id="node-input-influxMeasurment">
+      </div>
+
+  
+      <div class="form-row database-custom-server-influxDatabaseViewTableConfigs">
+        <label for="node-input-influxDatabaseViewTableConfigs"><i class="fa fa-table"></i> View Data </label>
+        <input type="text" id="node-input-influxDatabaseViewTableConfigs">
+      </div>
+    </div>
+  </div>
+
+  <div class="form-row" id="container-table-payload-tables-main">
+    <div id="container-table-payload-tables"></div>
+  </div>
+  <!-- <button id="container-table-payload-save-all" class="red-ui-button red-ui-button-large container-table-payload-save-all-button"><i class="fa fa-save"></i> Save </button> -->
+
+</script>
+  <!-- Node-red: database main configuration panel[end]  -->
+</body>

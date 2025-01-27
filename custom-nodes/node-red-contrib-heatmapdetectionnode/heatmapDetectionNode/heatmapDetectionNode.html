@@ -1,0 +1,177 @@
+<script type="text/javascript">
+    RED.nodes.registerType('heatmap generation', {
+        category: 'custom',
+        color: "#cbcbcb",
+        defaults: {
+            name: { value: "heatmap generation" },
+            position: { value: "CENTER" },
+            classes: { value: "2" },
+            opacity: { value: 0.2 },
+            radius: { value: 40 },
+            kernelSize: { value: 25 },
+            highDensityColor: { value: "#FF0000" },
+            lowDensityColor: { value: "#00FF04" }
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: "font-awesome/fa-object-ungroup",
+        inputLabels: function () {
+            var lab = "";
+            var props = null;
+            if (!Array.isArray(props)) {
+                props = [
+                    { p: "frameBuffer", v: this.frameBuffer, vt: "buffer" },
+                    { p: "position", v: this.position, vt: "str" },
+                    { p: "opacity", v: this.opacity, vt: "num" },
+                    { p: "radius", v: this.radius, vt: "num" },
+                    { p: "kernelSize", v: this.kernelSize, vt: "num" },
+                    { p: "highDensityColor", v: this.highDensityColor, vt: "num" },
+                    { p: "lowDensityColor", v: this.lowDensityColor, vt: "num" },
+                ];
+            }
+            if (props) {
+                for (var i = 0, l = props.length; i < l; i++) {
+                    if (i > 0) lab += "\n";
+                    if (i === 5) {
+                        lab += "... +" + (props.length - 5);
+                        break;
+                    }
+                    lab += props[i].p + ": ";
+
+                    var propType =
+                        props[i].p === "payload" ? this.payloadType : props[i].vt;
+                    if (propType === "json") {
+                        try {
+                            var parsedProp = JSON.parse(
+                                props[i].p === "payload" ? this.payload : props[i].v
+                            );
+                            propType = typeof parsedProp;
+                            if (propType === "object" && Array.isArray(parsedProp)) {
+                                propType = "Array";
+                            }
+                        } catch (e) {
+                            propType = "invalid";
+                        }
+                    }
+                    lab += propType;
+                }
+            }
+            return lab;
+        },
+        outputLabels: function () {
+            var lab = "";
+            var props = null;
+            if (!Array.isArray(props)) {
+                props = [
+                    { p: "annotatedBuffer", v: this.annotatedBuffer, vt: "buffer" },
+                ];
+            }
+            if (props) {
+                for (var i = 0, l = props.length; i < l; i++) {
+                    if (i > 0) lab += "\n";
+                    if (i === 5) {
+                        lab += "... +" + (props.length - 5);
+                        break;
+                    }
+                    lab += props[i].p + ": ";
+
+                    var propType =
+                        props[i].p === "payload" ? this.payloadType : props[i].vt;
+                    if (propType === "json") {
+                        try {
+                            var parsedProp = JSON.parse(
+                                props[i].p === "payload" ? this.payload : props[i].v
+                            );
+                            propType = typeof parsedProp;
+                            if (propType === "object" && Array.isArray(parsedProp)) {
+                                propType = "Array";
+                            }
+                        } catch (e) {
+                            propType = "invalid";
+                        }
+                    }
+                    lab += propType;
+                }
+            }
+
+            return lab;
+        },
+        label: function () {
+            return this.name || "heatmap generation";
+        },
+    });
+</script>
+
+<script type="text/html" data-help-name="object detection">
+    <p>This node will take input data as buffer frame and generate heatmap for the frames. Giving output as annotatedBuffer frame. </p>
+</script>
+
+<script type="text/html" data-template-name="heatmap generation">
+<div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i>Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+</div>
+
+<div class="form-row">
+    <label for="node-input-position"> Positon: </label>
+    <select id="node-input-position" style="width: 70%; min-width: 70%; max-width: 70%;">
+      <option value=""> Select postion </option>
+      <option value="CENTER"> Center </option>
+      <option value="CENTER_LEFT"> Center left </option>
+      <option value="CENTER_RIGHT"> Center right </option>
+      <option value="TOP_CENTER"> Top center </option>
+      <option value="TOP_LEFT"> Top left </option>
+      <option value="TOP_RIGHT"> Top right </option>
+      <option value="BOTTOM_LEFT"> Bottom left </option>
+      <option value="BOTTOM_CENTER"> Bottom center </option>
+      <option value="BOTTOM_RIGHT"> Bottom right </option>
+      <option value="CENTER_OF_MASS"> Center of mass </option>
+    </select>
+</div>
+
+<div class="form-row">
+    <label for="node-input-classes"> Class: </label>
+    <select id="node-input-classes" style="width: 70%; min-width: 70%; max-width: 70%;">
+      <option value=""> Select class </option>
+      <option value="0"> Person </option>
+      <option value="2"> Car </option>
+    </select>
+</div>
+
+<div class="form-row">
+    <label for="node-input-opacity">Opacity: </label>
+    <input type="number" id="node-input-opacity" placeholder="Opacity" step="any">
+</div>
+
+<div class="form-row">
+    <label for="node-input-radius">Radius: </label>
+    <input type="number" id="node-input-radius" placeholder="Radius">
+</div>
+
+<div class="form-row">
+    <label for="node-input-kernelSize">Kernel Size: </label>
+    <input type="number" id="node-input-kernelSize" placeholder="Kernel Size">
+</div>
+
+<div class="form-row">
+    <label for="node-input-highDensityColor">High density color: </label>
+    <input type="color" id="node-input-highDensityColor" placeholder="High density color">
+</div>
+
+<div class="form-row">
+    <label for="node-input-lowDensityColor">Low density color: </label>
+    <input type="color" id="node-input-lowDensityColor" placeholder="Low density color">
+</div>
+
+<!-- <div class="form-row" id="heatmap-generation-classes">
+    <label for="node-input-classes"> Classes: </label>
+    <input type="text" id="node-input-classes" 
+      style="width: 70%; min-width: 70%; max-width: 70%;">
+    <div class="form-tips" style="margin-top: 10px;">
+      <span data-i18n="node-red:ObjectModelNode.tip">
+        Tip: Select a comprehensive list of classes to identify.
+      </span>
+    </div>
+  </div> -->
+
+</script>

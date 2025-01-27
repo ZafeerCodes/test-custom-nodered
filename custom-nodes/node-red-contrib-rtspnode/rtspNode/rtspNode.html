@@ -1,0 +1,106 @@
+<script type="text/javascript">
+  RED.nodes.registerType("RTSP", {
+    category: "custom",
+    color: "#cbcbcb",
+    defaults: {
+      name: { value: "RTSP" },
+      rtspUrl: { value: "" },
+    },
+    inputs: 1,
+    outputs: 1,
+    inputLabels: function () {
+      var lab = "";
+      var props = null;
+      if (!Array.isArray(props)) {
+        props = [
+          { p: "rtspUrl", v: this.rtspUrl, vt: "str" },
+        ];
+      }
+      if (props) {
+        for (var i = 0, l = props.length; i < l; i++) {
+          if (i > 0) lab += "\n";
+          if (i === 5) {
+            lab += "... +" + (props.length - 5);
+            break;
+          }
+          lab += props[i].p + ": ";
+
+          var propType = props[i].p === "payload" ? this.payloadType : props[i].vt;
+          if (propType === "json") {
+            try {
+              var parsedProp = JSON.parse(
+                props[i].p === "payload" ? this.payload : props[i].v
+              );
+              propType = typeof parsedProp;
+              if (propType === "object" && Array.isArray(parsedProp)) {
+                propType = "Array";
+              }
+            } catch (e) {
+              propType = "invalid";
+            }
+          }
+          lab += propType
+        }
+      }
+      return lab;
+    },
+    outputLabels: function () {
+      var lab = "";
+      var props = null;
+      if (!Array.isArray(props)) {
+        props = [
+          { p: "imagePath", v: this.imagePath, vt: "str" },
+          { p: "imageUrl", v: this.imageUrl, vt: "str" },
+        ];
+      }
+      if (props) {
+        for (var i = 0, l = props.length; i < l; i++) {
+          if (i > 0) lab += "\n";
+          if (i === 5) {
+            lab += "... +" + (props.length - 5);
+            break;
+          }
+          lab += props[i].p + ": ";
+
+          var propType = props[i].p === "payload" ? this.payloadType : props[i].vt;
+          if (propType === "json") {
+            try {
+              var parsedProp = JSON.parse(
+                props[i].p === "payload" ? this.payload : props[i].v
+              );
+              propType = typeof parsedProp;
+              if (propType === "object" && Array.isArray(parsedProp)) {
+                propType = "Array";
+              }
+            } catch (e) {
+              propType = "invalid";
+            }
+          }
+          lab += propType
+        }
+      }
+
+      return lab;
+    },
+    icon: "inject.svg",
+    label: function () {
+      return this.name || "RTSP";
+    },
+  });
+</script>
+
+<script type="text/x-red" data-help-name="RTSP">
+  <p>This node handles RTSP (Real-Time Streaming Protocol) streams, allowing you to ingest and process live video feeds. It supports various configurations for stream handling and can output processed frames or video data.</p>
+</script>
+
+<script type="text/x-red" data-template-name="RTSP">
+    <div class="form-row">
+      <label for="node-input-name"><i class="fa fa-tag"></i> Name </label>
+      <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+
+    <div class="form-row">
+        <label for="node-input-rtspUrl"><i class="icon-tag"></i> RTSP URL: </label>
+        <input type="text" id="node-input-rtspUrl" placeholder="Enter url">
+    </div>
+</script>

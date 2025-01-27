@@ -1,0 +1,228 @@
+<script type="text/javascript">
+  RED.nodes.registerType("azure image analysis", {
+    category: "azure services",
+    color: "#cbcbcb",
+
+    defaults: {
+      inputOperation: { value: "generalAnalysis" },
+      visualFeatures: { value: [] },
+      threshold: { value: 0.3 },
+      imageRetrievalText: { value: "" },
+    },
+
+    oneditprepare: function () {
+      const node = this;
+
+      const operationDropdown = document.getElementById(
+        "node-input-inputOperation"
+      );
+      const visualFeaturesContainer = document.getElementById(
+        "visual-features-container"
+      );
+      const multiSelectOptions = document.querySelector(
+        ".multi-select-options"
+      );
+      const thresholdInput = document.getElementById("node-input-threshold");
+      const imageRetrievalInput = document.getElementById(
+        "node-input-imageRetrievalText"
+      );
+
+      console.log(thresholdInput, "thresholdInput");
+
+      const multiSelectHeader = document.querySelector(".multi-select-header");
+      multiSelectHeader.onclick = function () {
+        const isVisible = multiSelectOptions.style.display === "block";
+        multiSelectOptions.style.display = isVisible ? "none" : "block";
+      };
+
+      const checkboxes = multiSelectOptions.querySelectorAll(
+        "input[type='checkbox']"
+      );
+      if (Array.isArray(node.visualFeatures)) {
+        node.visualFeatures.forEach((feature) => {
+          const checkbox = Array.from(checkboxes).find(
+            (cb) => cb.value === feature
+          );
+          if (checkbox) {
+            checkbox.checked = true;
+          }
+        });
+      }
+
+      checkboxes.forEach((checkbox) => {
+        checkbox.onclick = function () {
+          const selectedFeatures = Array.from(checkboxes)
+            .filter((cb) => cb.checked)
+            .map((cb) => cb.value);
+          node.visualFeatures = selectedFeatures;
+          console.log("Selected Visual Features:", selectedFeatures);
+        };
+      });
+
+      operationDropdown.onchange = function () {
+        const isGeneralAnalysis = this.value === "generalAnalysis";
+        const isImageRetrieval = this.value === "imageRetrieval";
+
+        visualFeaturesContainer.style.display = isGeneralAnalysis
+          ? "block"
+          : "none";
+        imageRetrievalInput.style.display = isImageRetrieval ? "block" : "none";
+        thresholdInput.style.display = isImageRetrieval ? "block" : "none";
+      };
+
+      node.imageRetrievalText = imageRetrievalInput;
+    },
+
+    oneditsave: function () {
+      console.log("Node Saved with Values:", {
+        inputOperation: this.inputOperation,
+        visualFeatures: this.visualFeatures,
+        threshold: this.threshold,
+        imageRetrievalText: this.imageRetrievalText,
+      });
+    },
+
+    inputs: 1,
+    outputs: 1,
+    icon: "font-awesome/fa-text-width",
+    label: function () {
+      return this.name || "azure image analysis";
+    },
+  });
+</script>
+
+<script type="text/html" data-help-name="azure image analysis">
+  <p>
+    Use this node to perform image analysis using Azure Cognitive Services.<br />
+  </p>
+</script>
+
+<script type="text/html" data-template-name="azure image analysis">
+  <div class="form-row">
+    <label for="node-input-inputOperation"
+      ><i class="fa fa-tasks"></i> Operation
+    </label>
+    <select id="node-input-inputOperation">
+      <option value="generalAnalysis">General Analysis</option>
+      <option value="read">Read</option>
+      <option value="imageRetrieval">Image Retrieval</option>
+    </select>
+  </div>
+
+  <div id="visual-features-container" class="form-row">
+    <div class="multi-slect-parent"
+    style="display: flex; align-items: flex-start; gap: 14px;"
+    >
+      <label for="node-input-visualFeatures" style="width: unset;"
+        ><i class="fa fa-eye"></i> Visual Features
+      </label>
+      <div id="multi-select-container" class="multi-select"
+      
+      >
+        <div class="multi-select-header">Select Visual Features</div>
+        <div class="multi-select-options" style="display: none;">
+          <label class="label"
+          style="display: flex; gap: 2px; align-items: center; " 
+
+            ><input type="checkbox"  style="width: auto; margin-right: 14px;"  value="Objects" /> Objects</label
+          >
+          <label class="label"
+          style="display: flex; gap: 2px; align-items: center; " 
+            ><input type="checkbox"  style="width: auto; margin-right: 14px;"  value="Tags" /> Tags</label
+          >
+          <label class="label"
+          style="display: flex; gap: 2px; align-items: center; " 
+            ><input type="checkbox"  style="width: auto; margin-right: 14px;"  value="Caption" /> Caption</label
+          >
+          <label class="label"
+          style="display: flex; gap: 2px; align-items: center; " 
+            ><input type="checkbox"  style="width: auto; margin-right: 14px;"  value="DenseCaptions" /> Dense
+            Caption</label
+          >
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="imageRetrieval-container" class="form-row">
+    <label for="node-input-imageRetrievalText" style="display: none;">
+      <i class="fa fa-file-text-o"></i> Image Retrieval Input
+    </label>
+    <input
+      type="text"
+      id="node-input-imageRetrievalText"
+      style="display: none;"
+      placeholder="Enter retrieval text"
+    />
+  </div>
+
+  <div id="threshold-container" class="form-row">
+    <label for="node-input-threshold" style="display: none;">
+      <i class="fa fa-sliders"></i> Threshold (0-1)
+    </label>
+    <input
+      type="number"
+      id="node-input-threshold"
+      style="display: none;"
+      min="0"
+      max="1"
+      step="0.01"
+      placeholder="Enter similarity threhsold"
+    />
+  </div>
+</script>
+
+<style>
+  .multi-select {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 5px;
+    width: 200px;
+    position: relative;
+    cursor: pointer;
+  }
+
+  .multi-select-header {
+    font-size: 14px;
+    color: #333;
+  }
+
+  .multi-select-options {
+    /* position: absolute; */
+    top: 100%;
+    left: 0;
+    /* right: 0; */
+    display: flex;
+    flex-direction: column;
+    background: white;
+    border: 1px solid #fafafa;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    padding: 5px;
+    max-height: 150px;
+    overflow-y: auto;
+    width: 100%;
+  }
+
+
+  .multi-select-options label {
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .multi-select-options label:hover {
+    background: #f0f0f0;   /* Background highlight on hover */
+  }
+
+  .multi-slect-parent {
+    display: flex;
+    gap: 5px;
+  }
+
+  .multi-select-options input[type="checkbox"] {
+    margin: 0;            /* Removes default margin for checkboxes */
+    accent-color: #ffffff; /* Optional: Custom color for checkbox */
+  }
+
+</style>

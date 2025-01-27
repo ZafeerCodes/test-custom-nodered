@@ -1,0 +1,229 @@
+<!-- Node-red: Influx bucket creation [start] -->
+<script type="text/html" data-template-name="influxBucketCreationConfigs">
+    <style>
+        .form-row {
+            margin-bottom: 10px;
+        }
+  
+        .form-row label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .input-wrapper {
+            position: relative;
+            width: 100%;
+        }
+  
+        .input-wrapper i {
+            position: absolute;
+            right: 8px;
+            top: 10px;
+            color: #888;
+        }
+  
+        @media (max-width: 600px) {
+            .container-config-node-influx-bucket {
+                min-width: 100%;
+            }
+        }
+    </style>
+  
+    <!-- <div class="form-row">
+        <label for="node-config-input-name">Name</label>
+        <input type="text" id="node-config-input-name" placeholder="Name" aria-label="Node Name">
+    </div> -->
+  
+    <div class="container-config-node-influx-bucket" style="min-width: 500px;">
+      <div class="form-row" style="min-width: 500px; display: flex;">
+        <label for="node-config-input-bucketName"> Bucket name </label>
+        <div style="position: relative; width: 70%; margin-left: 3px;">
+          <input type="text" id="node-config-input-bucketName" placeholder="Bucket name" autocomplete="off" style="padding-right: 30px; width: 100%;">
+          <i class="fa fa-caret-down" style="position: absolute; right: 8px; top: 10px; color: #888;"></i>
+        </div>
+      </div>
+  
+        <div class="form-row node-config-bucketRetention-container" style="display: none;">
+            <label for="node-config-input-bucketRetention">Retention Period (in hours)</label>
+            <input type="number" id="node-config-input-bucketRetention" placeholder="e.g., 48" min="1" aria- label="Retention Period">
+        </div>
+    </div>
+  </script>
+
+<script type="text/javascript">
+    (function () {
+        var API_URI = `http://${window.location.hostname}:4500`;
+        var auth_token = localStorage.getItem("percepto-user");
+        var INFLUX_URI = `http://${window.location.hostname}:8086`;
+
+        let newBucket = false;
+        let configs = {};
+
+        function createBucket(payload, params) {
+            const influxUrl = `${params.url || INFLUX_URI}/api/v2/buckets?orgID=${params.org}`;
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    url: influxUrl,
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Token ${params.token}`,
+                        'Accept': 'application/json',
+                    },
+                    data: JSON.stringify(payload),
+                    success: function (data) {
+                        const result = data?.buckets
+                            ?.map(({ id, name }) => ({ id, name }))
+                            .filter((el) => el.name !== "_monitoring" && el.name !== "_tasks");
+                        resolve(result);
+                    },
+                    error: function (error) {
+                        console.error('Failed to fetch data:', error);
+                        reject(error);
+                    }
+                });
+            });
+        }
+        function getBucketLists(params) {
+            const influxUrl = `${params.url || INFLUX_URI}/api/v2/buckets?orgID=${params.org}`;
+
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    url: influxUrl,
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Token ${params.token}`,
+                        'Accept': 'application/json',
+                    },
+                    success: function (data) {
+                        const result = data?.buckets
+                            ?.map(({ id, name }) => ({ id, name }))
+                            .filter((el) => el.name !== "_monitoring" && el.name !== "_tasks");
+                        resolve(result);
+                    },
+                    error: function (error) {
+                        console.error('Failed to fetch data:', error);
+                        reject(error);
+                    }
+                });
+            });
+        }
+
+        RED.nodes.registerType('influxBucketCreationConfigs', {
+            category: 'config',
+            color: '#f5b041',
+            defaults: {
+                name: { value: '' },
+                bucketName: { value: '' },
+                retention: { value: '' },
+            },
+            inputs: 0,
+            outputs: 0,
+            icon: 'database.png',
+            label: function () {
+                return this.name || this.bucketName || "Influx Bucket";
+            },
+            oneditprepare: async function () {
+                const configNode = RED.nodes.getType("influxBucketCreationConfigs");
+                const dbConfigs = configNode?.defaults?.dbConfigs;
+
+                if (!dbConfigs) {
+                    RED.notify("Missing database configurations!", "error");
+                    return;
+                }
+
+                configs = dbConfigs || {};
+                console.log(configs, "configs")
+                let dbLists = [];
+
+                try {
+                    dbLists = (await getBucketLists(configs))?.map((res) => res.name) || [];
+                } catch (error) {
+                    RED.notify("Failed to fetch bucket lists: " + error.message, "error");
+                    console.error(error);
+                }
+
+                $("#node-config-input-bucketName").autocomplete({
+                    source: function (request, response) {
+                        const matches = dbLists.filter((v) =>
+                            v.toLowerCase().includes(request.term.toLowerCase())
+                        ).map((v) => ({ label: v, value: v }));
+
+                        if (!matches.length) {
+                            matches.push({
+                                label: `Create "${request.term}"`,
+                                value: request.term,
+                                isCreateOption: true,
+                            });
+                        }
+
+                        response(matches);
+                    },
+                    minLength: 1,
+                    select: function (event, ui) {
+                        if (ui.item.isCreateOption) {
+                            const newDb = ui.item.value;
+                            dbLists.push(newDb);
+                            $("#node-config-input-bucketName").val(newDb);
+                            newBucket = true;
+                            $(".node-config-bucketRetention-container").show();
+                        } else {
+                            $("#node-config-input-bucketName").val(ui.item.value);
+                            newBucket = false;
+                            $(".node-config-bucketRetention-container").hide();
+                        }
+                    },
+                });
+
+                $("#node-config-input-bucketName").on("focus", function () {
+                    $(this).autocomplete("search", "");
+                });
+
+                $('#node-config-input-bucketName').val(this.bucketName || '');
+                $('#node-config-input-bucketRetention').val(this.retention || '');
+
+                if (this.bucketName && newBucket) {
+                    $(".node-config-bucketRetention-container").show();
+                }
+            },
+            oneditsave: async function () {
+                const bucketName = $('#node-config-input-bucketName').val().trim();
+                const retention = $('#node-config-input-bucketRetention').val().trim();
+
+                if (!bucketName) {
+                    RED.notify("Bucket Name cannot be empty!", "error");
+                    return false;
+                }
+
+                if (newBucket && (!retention || isNaN(retention) || retention <= 0)) {
+                    RED.notify("Retention Period must be a positive number!", "error");
+                    return false;
+                }
+
+                this.bucketName = bucketName;
+                this.retention = retention;
+
+                if (newBucket) {
+                    const payload = {
+                        name: bucketName,
+                        retentionRules: [
+                            {
+                                type: "expire",
+                                everySeconds: Number(retention) * 24 * 3600,
+                            },
+                        ],
+                        orgID: configs.org,
+                    };
+
+                    try {
+                        await createBucket(payload, configs);
+                        RED.notify("Bucket created successfully!", "success");
+                    } catch (error) {
+                        RED.notify("Error creating bucket: " + (error.message || "Unknown error"), "error");
+                        console.error(error);
+                    }
+                }
+                newBucket = false;
+            },
+        });
+    })();
+</script>
+<!-- Node-red: Influx bucket creation [end] -->

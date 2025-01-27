@@ -1,0 +1,27 @@
+<script type="text/javascript">
+  RED.nodes.registerType("fall detection", {
+    category: "custom",
+    color: "#cbcbcb",
+    defaults: {
+      name: { value: "fall detection" },
+      text: { value: "" },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "font-awesome/fa-object-ungroup",
+    label: function () {
+      return this.name || "fall detection";
+    },
+  });
+</script>
+
+<script type="text/html" data-help-name="fall detection">
+  <p>The simplest of all Nodes to implement as an introductory example.<br/></p>
+</script>
+
+<script type="text/html" data-template-name="fall detection">
+    <div class="form-row">
+      <label for="node-input-name"><i class="fa fa-tag"></i> Name </label>
+      <input type="text" id="node-input-name" data-i18n="Name" placeholder="Name">
+  </div>
+</script>

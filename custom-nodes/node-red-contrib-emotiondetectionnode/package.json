@@ -1,0 +1,20 @@
+{
+  "name": "node-red-contrib-emotiondetectionnode",
+  "version": "0.0.1",
+  "description": "Node to create custom function in Javascript and python",
+  "dependencies": {
+    "sharp": "^0.32.1",
+    "text2png": "^2.3.0"
+  },
+  "keywords": [
+    "node-red",
+    "emotion",
+    "detection",
+    "emotion-detection"
+  ],
+  "node-red": {
+    "nodes": {
+      "sample": "emotionDetectionNode/emotionDetectionNode.js"
+    }
+  }
+}

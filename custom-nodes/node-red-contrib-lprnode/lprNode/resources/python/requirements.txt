@@ -1,0 +1,6 @@
+typing_extensions
+opencv-python
+paddleocr
+paddlepaddle
+numpy
+tensorflow

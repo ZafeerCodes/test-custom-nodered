@@ -1,0 +1,20 @@
+{
+  "name": "node-red-contrib-chatviewnode",
+  "version": "0.0.1",
+  "description": "description",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "web-socket-server": "file:../../packages/local_modules/web-socket-server"
+  },
+  "keywords": [
+    "node-red",
+    "chat",
+    "chat-view",
+    "chatview"
+  ],
+  "node-red": {
+    "nodes": {
+      "sample": "chatViewNode/chatViewNode.js"
+    }
+  }
+}

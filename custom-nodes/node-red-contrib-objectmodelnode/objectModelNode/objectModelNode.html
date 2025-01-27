@@ -1,0 +1,725 @@
+<script type="text/javascript" src="resources/node-red-contrib-objectmodelnode/yolo_classes.js"></script>
+
+<script type="text/javascript">
+  (function () {
+    const organizationId = localStorage.getItem("organizationId");
+    const location = window.location;
+
+    const API_URI = `http://${location.hostname}:4500`;
+
+    const RED_API_URI = `http://${location.hostname}:1880`;
+
+    const NGINX_API_URI = `http://${location.hostname}:3077`;
+
+    function refreshToken() {
+      const refreshToken = localStorage.getItem("percepto-refresh-token");
+
+      if (!refreshToken) {
+        window.location.pathname = "/login";
+        return Promise.reject("Refresh token is missing");
+      }
+
+      return new Promise((resolve, reject) => {
+        $.ajax({
+          url: `${API_URI}/auth/refresh-token`,
+          method: "POST",
+          data: { refreshToken },
+          success: function (accessToken) {
+            if (accessToken) {
+              // Store the new access token in localStorage
+              localStorage.setItem("percepto-user", accessToken);
+              console.log("Access token successfully refreshed.");
+              resolve(accessToken);
+            } else {
+              console.error(
+                "Failed to refresh access token: Missing access token in response."
+              );
+              window.location.pathname = "/login";
+              reject("Missing access token");
+            }
+          },
+          error: function (error) {
+            console.error("Error refreshing token:", error);
+            // If refresh fails, redirect to login page
+            localStorage.removeItem("percepto-user");
+            localStorage.removeItem("percepto-refresh-token");
+            window.location.pathname = "/login";
+            reject(error);
+          },
+        });
+      });
+    }
+
+    let cloudModals = [
+      { name: "Yolo v8 M", value: "yolo-v8-m.onnx" },
+      { name: "Person Classification v1", value: "person-classification-v1.onnx" },
+      { name: "TMS v1", value: "tms-v1.onnx" },
+      { name: "Yolo Face", value: "yolo-v8-face.onnx" },
+      { name: "Weapon Detection v1", value: "weapon-v1.onnx" },
+      { name: "Retinanet v1", value: "retinanet-v1.onnx" },
+      { name: "TMS Model v3", value: "tms-model-v3.onnx" },
+      { name: "Kaddad Model v2", value: "kaddad-model-v2.onnx" },
+    ]
+
+
+    RED.nodes.registerType("object detection", {
+      category: "custom",
+      color: "#cbcbcb",
+      defaults: {
+        name: { value: "object detection" },
+        modelType: { value: "" },
+        model: { value: "" },
+        modelFilePath: { value: "" },
+        modelLabels: { value: "" },
+        multiselectObjects: { value: "" },
+        multiselectClasses: { value: "" },
+        multiselectLabels: { value: "" },
+        threshold: {
+          value: 0.25,
+          // validate: function (num) {
+          //   if(num < 0 || num > 1) {
+          //     return false;
+          //   }
+          //   return true
+          // },
+        },
+        isTrackingEnabled: {
+          value: false,
+        },
+        trackingAlgo: {
+          value: "centroid-tracking",
+        },
+        boundingBoxColor: {
+          value: "#00FF00",
+        },
+        labelColor: {
+          value: "#00FF00",
+        },
+        fontSize: {
+          value: "25",
+        },
+        outputProperties: {
+          value: [
+            {
+              key: "boxes",
+              type: "array_num"
+            },
+            {
+              key: "labels",
+              type: "array_num"
+            },
+            {
+              key: "annotatedBuffer",
+              type: "buffer"
+            },
+            {
+              key: "detectedObjects",
+              type: "array_obj"
+            }
+          ]
+        }
+      },
+      inputs: 1,
+      outputs: 1,
+      icon: "font-awesome/fa-object-ungroup",
+
+      inputLabels: function () {
+        var lab = "";
+        var props = null;
+        if (!Array.isArray(props)) {
+          props = [
+            { p: "frameBuffer", v: this.frameBuffer, vt: "buffer" },
+            { p: "objects", v: this.objects, vt: "str" },
+            { p: "classes", v: this.classes, vt: "str" },
+            { p: "threshold", v: this.threshold, vt: "str" },
+            { p: "model", v: this.model, vt: "str" },
+            {
+              p: "isTrackingEnabled",
+              v: this.isTrackingEnabled,
+              vt: "boolean",
+            },
+            { p: "threshold", v: this.threshold, vt: "str" },
+            { p: "trackingAlgo", v: this.trackingAlgo, vt: "str" },
+            { p: "labelColor", v: this.labelColor, vt: "str" },
+            { p: "fontSize", v: this.fontSize, vt: "number" },
+            { p: "modelFilePath", v: this.modelFilePath, vt: "str" },
+            { p: "modelLabels", v: this.modelLabels, vt: "str" },
+          ];
+        }
+        if (props) {
+          for (var i = 0, l = props.length; i < l; i++) {
+            if (i > 0) lab += "\n";
+            if (i === 5) {
+              lab += "... +" + (props.length - 5);
+              break;
+            }
+            lab += props[i].p + ": ";
+
+            var propType =
+              props[i].p === "payload" ? this.payloadType : props[i].vt;
+            if (propType === "json") {
+              try {
+                var parsedProp = JSON.parse(
+                  props[i].p === "payload" ? this.payload : props[i].v
+                );
+                propType = typeof parsedProp;
+                if (propType === "object" && Array.isArray(parsedProp)) {
+                  propType = "Array";
+                }
+              } catch (e) {
+                propType = "invalid";
+              }
+            }
+            lab += propType;
+          }
+        }
+        return lab;
+      },
+
+      outputLabels: function () {
+        var lab = "";
+        var props = null;
+        if (!Array.isArray(props)) {
+          props = [
+            { p: "boxes", v: this.boxes, vt: "array" },
+            { p: "labels", v: this.labels, vt: "array" },
+            { p: "annotatedBuffer", v: this.annotatedBuffer, vt: "buffer" },
+            { p: "detectedObjects", v: this.detectedObjects, vt: "array" },
+          ];
+        }
+        if (props) {
+          for (var i = 0, l = props.length; i < l; i++) {
+            if (i > 0) lab += "\n";
+            if (i === 5) {
+              lab += "... +" + (props.length - 5);
+              break;
+            }
+            lab += props[i].p + ": ";
+
+            var propType =
+              props[i].p === "payload" ? this.payloadType : props[i].vt;
+            if (propType === "json") {
+              try {
+                var parsedProp = JSON.parse(
+                  props[i].p === "payload" ? this.payload : props[i].v
+                );
+                propType = typeof parsedProp;
+                if (propType === "object" && Array.isArray(parsedProp)) {
+                  propType = "Array";
+                }
+              } catch (e) {
+                propType = "invalid";
+              }
+            }
+            lab += propType;
+          }
+        }
+
+        return lab;
+      },
+
+      label: function () {
+        return this.name || "object detection";
+      },
+      oneditprepare: function () {
+        var node = this;
+        const objectInput = $("#node-input-objects");
+        objectInput.on("change", function (event) {
+          console.log(JSON.stringify(event.target.value), "values");
+        });
+        let $object_objects = $("#object-detection-objects");
+        let $object_classes = $("#object-detection-classes");
+        let $object_labels = $("#object-detection-label");
+        let $object_customLabels = $("#object-detection-customLabel");
+        $object_objects.show();
+        $object_classes.hide();
+        $object_labels.hide();
+        $object_customLabels.hide();
+
+        $("#node-input-model").on("change", function (event) {
+          if (event.target.value === "yolo-v8-m.onnx") {
+            $object_objects.show();
+            $object_classes.hide();
+            $object_labels.hide();
+            $object_customLabels.hide();
+          } else if (event.target.value === "person-classification-v1.onnx") {
+            $object_classes.show();
+            $object_objects.hide();
+            $object_labels.hide();
+            $object_customLabels.hide();
+          } else if (event.target.value === "tms-v1.onnx") {
+            $object_objects.hide();
+            $object_classes.hide();
+            $object_labels.show();
+            $object_customLabels.hide();
+          } else {
+            $object_objects.hide();
+            $object_classes.hide();
+            $object_labels.hide();
+          }
+        });
+        $("#node-input-multiselectObjects").typedInput({
+          types: [
+            {
+              value: "objects",
+              multiple: "true",
+              options: yolo_classes.map((item) => {
+                return { value: item, label: item };
+              }),
+            },
+          ],
+        });
+        $("#node-input-multiselectObjects").on("change", function () {
+          var selectedValues = $(this).val();
+          if (!selectedValues || selectedValues.length === 0) {
+            $(this)
+              .siblings(".red-ui-typedInput-container")
+              .find(".red-ui-typedInput-option-label")
+              .text("All");
+          }
+        });
+        $("#node-input-multiselectClasses").typedInput({
+          types: [
+            {
+              value: "classes",
+              multiple: "true",
+              options: classification_classes.map((item) => {
+                return { value: item, label: item };
+              }),
+            },
+          ],
+        });
+        $("#node-input-multiselectClasses").on("change", function () {
+          var selectedValues = $(this).val();
+          if (!selectedValues || selectedValues.length === 0) {
+            $(this)
+              .siblings(".red-ui-typedInput-container")
+              .find(".red-ui-typedInput-option-label")
+              .text("All");
+          }
+        });
+
+        $("#node-input-multiselectLabels").typedInput({
+          types: [
+            {
+              value: "labels",
+              multiple: "true",
+              options: tms_model_labels.map((item) => {
+                return { value: item, label: item };
+              }),
+            },
+          ],
+        });
+        $("#node-input-multiselectLabels").on("change", function () {
+          var selectedValues = $(this).val();
+          if (!selectedValues || selectedValues.length === 0) {
+            $(this)
+              .siblings(".red-ui-typedInput-container")
+              .find(".red-ui-typedInput-option-label")
+              .text("All");
+          }
+        });
+
+        $("#node-input-isTrackingEnabled").on("change", function (event) {
+          let value = event.target.checked;
+          node.isTrackingEnabled = value;
+          value
+            ? $(".object-detection-tracking-algo").show()
+            : $(".object-detection-tracking-algo").hide();
+        });
+
+        $("#models").hide();
+
+        function updateModelType() {
+          const tokenString = localStorage.getItem("percepto-user");
+          let baseerModels = ["Baseer Models"];
+          const $modelTypes = $("#node-input-modelType");
+
+          $.ajax({
+            type: "GET",
+            url: `${API_URI}/warehouse/get-model-types/?organizationId=${organizationId}`,
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: "Bearer " + tokenString,
+            },
+            success: function (types) {
+              $modelTypes.empty();
+              types = [...types, ...baseerModels];
+
+              if (types?.length) {
+                const selectedType = types?.find(
+                  (type) => type === node.modelType
+                );
+
+                $modelTypes.append(
+                  `<option value="${node.modelType}">${selectedType || "Select Model Type"
+                  }</option>`
+                );
+
+                for (const type of types) {
+                  if (type !== node.modelType) {
+                    $modelTypes.append(
+                      `<option value="${type}">${type}</option>`
+                    );
+                  }
+                }
+              }
+            },
+            error: async function (xhr, status, error) {
+              console.error("Error during fetch model types");
+              // $("#node-input-model").hide();
+              $modelTypes.empty();
+              let types = [...baseerModels];
+
+              if (types?.length) {
+                const selectedType = types?.find(
+                  (type) => type === node.modelType
+                );
+
+                $modelTypes.append(
+                  `<option value="${node.modelType}">${selectedType || "Select Model Type"
+                  }</option>`
+                );
+
+                for (const type of types) {
+                  if (type !== node.modelType) {
+                    $modelTypes.append(
+                      `<option value="${type}">${type}</option>`
+                    );
+                  }
+                }
+              }
+
+              if (xhr.status === 401) {
+                const newAccessToken = await refreshToken();
+
+                if (newAccessToken) {
+                  updateModelType();
+                }
+              }
+            },
+          });
+        }
+
+        function updateModels(modelType) {
+          const tokenString = localStorage.getItem("percepto-user");
+          const $models = $("#node-input-model");
+
+          if (modelType !== "Baseer Models") {
+            $.ajax({
+              type: "GET",
+              url: `${API_URI}/warehouse/get-models-by-type/?organizationId=${organizationId}&type=${modelType}`,
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + tokenString,
+              },
+              success: function (models) {
+                $("#models").show();
+
+                $models.empty();
+
+                if (models?.length) {
+                  const selectedModel = models?.find(
+                    (model) => model.id === node.model
+                  );
+
+                  $models.append(
+                    `<option value="${node.model}">${selectedModel?.name || "Select Model"
+                    }</option>`
+                  );
+
+                  for (const model of models) {
+                    if (model.id !== node.model) {
+                      $models.append(
+                        `<option value="${model.id}">${model.name}</option>`
+                      );
+                    }
+                  }
+                }
+              },
+              error: async function (xhr, status, error) {
+                console.error("Error during fetch models");
+                if (xhr.status === 401) {
+                  const newAccessToken = await refreshToken();
+
+                  if (newAccessToken) {
+                    updateModels(modelType);
+                  }
+                }
+              },
+            });
+          } else {
+            $("#models").show();
+            $models.empty()
+            const selectedModel = cloudModals?.find(
+              (model) => model.value === node.model
+            );
+            $models.append(
+              `<option value="${node.model}">${selectedModel?.name || "Select Model"
+              }</option>`
+            );
+
+            $models.append` <option value="yolo-v8-m.onnx"> Yolo v8 M </option>
+                  <option value="person-classification-v1.onnx"> Person Classification v1  </option>
+                  <option value="tms-v1.onnx"> TMS v1 </option>
+                  <option value="yolo-v8-face.onnx"> Yolo Face </option>
+                  <option value="weapon-v1.onnx"> Weapon Detection v1 </option>
+                  <option value="retinanet-v1.onnx" disabled> Retinanet v1 </option>
+                  <option value="tms-model-v3.onnx" disabled> TMS Model v3  </option>
+                  <option value="kaddad-model-v2.onnx" disabled> Kaddad Model v2  </option>`;
+          }
+        }
+ 
+
+        function updateModelLabels(modelId, modelType) {
+          const tokenString = localStorage.getItem("percepto-user");
+          console.log(node.modelType, "node.modelType")
+          if (modelType !== "Baseer Models") {
+            $.ajax({
+              type: "GET",
+              url: `${API_URI}/models/${modelId}`,
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${tokenString}`,
+              },
+              success: function (model) {
+                if (model && model.id && model.labels) {
+                  // Update node properties
+                  node.model = model.id;
+                  node.modelFilePath = model.filePath;
+                  node.modelLabels = node.modelLabels || model.labels.join(",");
+
+                  $object_customLabels.show();
+
+                  // Remove existing input element if it exists
+                  const $multiSelectCustomLabels = $("#node-input-multiselectCustomLabels");
+                  $multiSelectCustomLabels.remove();
+
+                  // Create new input element
+                  const newInput = $(
+                    `<input type="text" id="node-input-multiselectCustomLabels" style="width: 70%; min-width: 70%; max-width: 70%;" autocomplete="off" class="red-ui-typedInput" value="">`
+                  );
+
+                  // Append new input to the dropdown container
+                  $("#labelsDropdown").append(newInput);
+
+                  // Initialize typedInput with model labels
+                  newInput.typedInput({
+                    types: [
+                      {
+                        value: "modelLabels",
+                        multiple: true,
+                        options: model.labels.map((item) => {
+                          return { value: item, label: item };
+                        }),
+                      },
+                    ],
+                  });
+
+                  // Set default value or "All" if node.modelLabels is empty
+                  newInput.typedInput("value", node.modelLabels || "All");
+
+                  // Handle change event
+                  newInput.on("change", function () {
+                    const selectedValues = $(this).val();
+                    if (!selectedValues || selectedValues.length === 0) {
+                      node.modelLabels = model.labels.join(",");
+                      $(this)
+                        .siblings(".red-ui-typedInput-container")
+                        .find(".red-ui-typedInput-option-label")
+                        .text("All");
+                    } else {
+                      node.modelLabels = selectedValues;
+                    }
+                  });
+
+
+                } else {
+                  console.error("Invalid model data received from the server.");
+                }
+              },
+              error: async function (xhr, status, error) {
+                console.error("Error during fetch model labels:", error);
+
+                // Handle unauthorized error by refreshing the token
+                if (xhr.status === 401) {
+                  const newAccessToken = await refreshToken();
+                  if (newAccessToken) {
+                    updateModelLabels(modelId, node.modelType); // Retry the request
+                  } else {
+                    console.error("Failed to refresh token.");
+                  }
+                }
+              },
+            });
+          } else {
+            // Handle Cloud model type
+            node.model = modelId;
+            node.modelFilePath = `models/${modelId}`;
+            node.modelLabels = "";
+          }
+        }
+        updateModelType();
+
+        $("#node-input-modelType").on("change", function (e) {
+          if (node.modelType || this.value.length > 0) {
+            node.modelType = this.value.length > 0 ? this.value : node.modelType;
+            updateModels(this.value.length > 0 ? this.value : node.modelType);
+          }
+        });
+
+        $("#node-input-model").on("change", function () {
+          if (node.model || this.value.length > 0) {
+            updateModelLabels(this.value.length > 0 ? this.value : node.model, node.modelType);
+          }
+        });
+      },
+    });
+  })();
+</script>
+
+<script type="text/x-red" data-help-name="object detection">
+  <p>This node processes input data to detect objects using a specified model. It outputs detected objects along with their associated metadata.</p>
+</script>
+
+<script type="text/html" data-template-name="object detection">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name </label>
+    <input type="text" id="node-input-name" data-i18n="Name" placeholder="Name">
+  </div>
+
+    <div class="form-row">
+      <label for="node-input-modelType"> Model Type: </label>
+      <select id="node-input-modelType" style="width: 70%; min-width: 70%; max-width: 70%;">
+        <!-- <option value="" disabled selected> Select Model Type </option> -->
+      </select>
+    </div>
+
+    <div class="form-row" id="models">
+      <label for="node-input-model"> Model: </label>
+      <select id="node-input-model" style="width: 70%; min-width: 70%; max-width: 70%;">
+        <!-- <option value="" disabled selected> Select Model </option> -->
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label for="node-input-threshold"> Threshold: </label>
+      <input
+        id="node-input-threshold"
+        data-i18n="threshold"
+        type="number"
+        step=".01"
+        min="0"
+        max="1"
+      >
+    </div>
+
+    <div class="form-row">
+      <label for="node-input-isTrackingEnabled"> Enable tracking: </label>
+      <input
+        id="node-input-isTrackingEnabled"
+        data-i18n="isTrackingEnabled"
+        type="checkbox"
+        style="width: unset!important;"
+      >
+    </div>
+
+    <div class="form-row object-detection-tracking-algo">
+      <label for="node-input-trackingAlgo"> Tracking Algorithm: </label>
+      <select id="node-input-trackingAlgo" style="width: 70%; min-width: 70%; max-width: 70%;">
+        <option value=""> select </option>
+        <option value="centroid-tracking"> Centroid Tracking  </option>
+        <option value="kalman-filter" disabled> Kalman Filter  </option>
+        <option value="optical-flow" disabled> Optical Flow  </option>
+        <option value="deep-sort" disabled> DeepSORT  </option>
+        <option value="byte-track" disabled> ByteTrack  </option>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label for="node-input-boundingBoxColor"> Bounding box color: </label>
+      <input
+        id="node-input-boundingBoxColor"
+        data-i18n="boundingBoxColor"
+        type="color"
+      >
+    </div>
+    <div class="form-row">
+      <label for="node-input-labelColor"> Label color: </label>
+      <input
+        id="node-input-labelColor"
+        data-i18n="labelColor"
+        type="color"
+      >
+    </div>
+    <div class="form-row">
+      <label for="node-input-fontSize"> Label font size: </label>
+      <input
+        id="node-input-fontSize"
+        data-i18n="fontSize"
+        type="text"
+      >
+    </div>
+
+    <div class="form-row" id="object-detection-objects">
+      <!-- <label for="node-input-objects"> Objects: </label> -->
+      <label for="node-input-multiselectObjects"> Objects: </label>
+      <!-- <textarea
+        id="node-input-objects"
+        data-i18n="Objects"
+        rows="4"
+        placeholder="Enter objects separated by commas (e.g., person, car, dog)"
+        style="width: 70%; min-width: 70%; max-width: 70%;"
+      ></textarea> -->
+      <input type="text" id="node-input-multiselectObjects"
+        style="width: 70%; min-width: 70%; max-width: 70%;">
+      <div class="form-tips" style="margin-top: 10px;">
+        <span data-i18n="node-red:ObjectModelNode.tip">
+          Tip: Select a comprehensive list of objects to identify.
+        </span>
+      </div>
+    </div>
+
+    <div class="form-row" id="object-detection-classes">
+      <!-- <label for="node-input-classes"> Classes: </label> -->
+      <label for="node-input-multiselectClasses"> Classes: </label>
+      <!-- <textarea
+        id="node-input-classes"
+        data-i18n="classes"
+        rows="4"
+        placeholder="Enter classes separated by commas (e.g., visitor, workers, security)"
+        style="width: 70%; min-width: 70%; max-width: 70%;"
+      ></textarea> -->
+      <input type="text" id="node-input-multiselectClasses"
+        style="width: 70%; min-width: 70%; max-width: 70%;">
+      <div class="form-tips" style="margin-top: 10px;">
+        <span data-i18n="node-red:ObjectModelNode.tip">
+          Tip: Select a comprehensive list of classes to identify.
+        </span>
+      </div>
+    </div>
+
+    <div class="form-row" id="object-detection-label">
+      <label for="node-input-multiselectLabels"> Labels: </label>
+      <input type="text" id="node-input-multiselectLabels"
+        style="width: 70%; min-width: 70%; max-width: 70%;">
+      <div class="form-tips" style="margin-top: 10px;">
+        <span data-i18n="node-red:ObjectModelNode.tip">
+          Tip: Select a comprehensive list of labels to identify.
+        </span>
+      </div>
+    </div>
+
+      <div class="form-row" id="object-detection-customLabel">
+        <label for="node-input-multiselectCustomLabels"> Labels: </label>
+        <span id="labelsDropdown">
+          <input type="text" id="node-input-multiselectCustomLabels">
+          <!-- style="width: 70%; min-width: 70%; max-width: 70%;" -->
+        </span>
+        <div class="form-tips" style="margin-top: 10px;">
+          <span data-i18n="node-red:ObjectModelNode.tip">
+            Tip: Select a comprehensive list of labels to identify.
+          </span>
+        </div>
+    </div>
+</script>

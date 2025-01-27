@@ -1,0 +1,22 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      python-integration-helper:
+        specifier: file:../../packages/local_modules/python-integration-helper
+        version: file:../../packages/local_modules/python-integration-helper
+
+packages:
+
+  python-integration-helper@file:../../packages/local_modules/python-integration-helper:
+    resolution: {directory: ../../packages/local_modules/python-integration-helper, type: directory}
+
+snapshots:
+
+  python-integration-helper@file:../../packages/local_modules/python-integration-helper: {}

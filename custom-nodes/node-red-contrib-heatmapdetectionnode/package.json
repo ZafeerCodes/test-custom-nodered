@@ -1,0 +1,16 @@
+{
+  "name": "node-red-contrib-heatmapdetectionnode",
+  "version": "0.0.1",
+  "description": "The node to detect heatmap",
+  "dependencies": {
+    "python-integration-helper": "file:../../packages/local_modules/python-integration-helper"
+  },
+  "keywords": [
+    "node-red"
+  ],
+  "node-red": {
+    "nodes": {
+      "sample": "heatmapDetectionNode/heatmapDetectionNode.js"
+    }
+  }
+}

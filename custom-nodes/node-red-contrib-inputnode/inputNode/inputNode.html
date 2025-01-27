@@ -1,0 +1,445 @@
+<script type="text/javascript">
+  RED.nodes.registerType("input", {
+    category: "custom",
+    color: "#cbcbcb",
+    defaults: {
+      name: { value: "input" },
+      format: { value: "rtsp" },
+      rtspUrl: { value: "" },
+      videoRepeat: { value: "" },
+      frameRate: {
+        value: 1,
+        validate: function (v) {
+          const numValue = Number(v);
+          return !isNaN(numValue);
+        },
+      },
+      selectedDataColl: { value: "" },
+      selectedFile: { value: "" },
+    },
+    outputs: 1,
+    icon: "inject.svg",
+    inputLabels: function () {
+      var lab = "";
+      var props = null;
+      if (!Array.isArray(props)) {
+        props = [
+          { p: "rtspUrl", v: this.rtspUrl, vt: "str" },
+          { p: "videoRepeat", v: this.videoRepeat, vt: "boolean" },
+          { p: "frameRate", v: this.frameRate, vt: "str" },
+          { p: "selectedFile", v: this.selectedFile, vt: "str" },
+        ];
+      }
+      if (props) {
+        for (var i = 0, l = props.length; i < l; i++) {
+          if (i > 0) lab += "\n";
+          if (i === 5) {
+            lab += "... +" + (props.length - 5);
+            break;
+          }
+          lab += props[i].p + ": ";
+
+          var propType =
+            props[i].p === "payload" ? this.payloadType : props[i].vt;
+          if (propType === "json") {
+            try {
+              var parsedProp = JSON.parse(
+                props[i].p === "payload" ? this.payload : props[i].v
+              );
+              propType = typeof parsedProp;
+              if (propType === "object" && Array.isArray(parsedProp)) {
+                propType = "Array";
+              }
+            } catch (e) {
+              propType = "invalid";
+            }
+          }
+          lab += propType;
+        }
+      }
+      return lab;
+    },
+    outputLabels: function () {
+      var lab = "";
+      var props = null;
+      if (!Array.isArray(props)) {
+        props = [{ p: "frameBuffer", v: this.frameBuffer, vt: "buffer" }];
+      }
+      if (props) {
+        for (var i = 0, l = props.length; i < l; i++) {
+          if (i > 0) lab += "\n";
+          if (i === 5) {
+            lab += "... +" + (props.length - 5);
+            break;
+          }
+          lab += props[i].p + ": ";
+
+          var propType =
+            props[i].p === "payload" ? this.payloadType : props[i].vt;
+          if (propType === "json") {
+            try {
+              var parsedProp = JSON.parse(
+                props[i].p === "payload" ? this.payload : props[i].v
+              );
+              propType = typeof parsedProp;
+              if (propType === "object" && Array.isArray(parsedProp)) {
+                propType = "Array";
+              }
+            } catch (e) {
+              propType = "invalid";
+            }
+          }
+          lab += propType;
+        }
+      }
+
+      return lab;
+    },
+
+    label: function () {
+      return this.name || "input";
+    },
+    oneditsave: function () {
+      var node = this;
+
+      var format = node.format;
+      var selectedDataColl = $("#node-input-selectedDataColl").val() || "";
+      var selectedFile = $("#node-input-selectedFile").val() || "";
+
+      if (
+        format !== node.format ||
+        selectedDataColl !== node.selectedDataColl ||
+        selectedFile !== node.selectedFile
+      ) {
+        node.format = format;
+        node.selectedDataColl = selectedDataColl;
+        node.selectedFile = selectedFile;
+        RED.nodes.node(node.id).changed = true;
+        RED.nodes.dirty(true);
+      }
+    },
+    oneditprepare: function () {
+      var node = this;
+      const tokenString = localStorage.getItem("percepto-user");
+      const organizationId = localStorage.getItem("organizationId");
+
+      $("#node-input-format").val(node.format || "");
+      $("#node-input-selectedDataColl").val(node.selectedDataColl || "");
+      $("#node-input-selectedFile").val(node.selectedFile || "");
+      $(document).ready(function () {
+        $("#input-selectedDataColl-info").hide();
+      });
+
+      const location = window.location;
+
+      const API_URI = `http://${location.hostname}:4500`;
+
+      const RED_API_URI = `http://${location.hostname}:1880`;
+
+      const NGINX_API_URI = `http://${location.hostname}:3077`;
+
+      const rasterVideoFormats = [
+        "mp4",
+        "mov",
+        "avi",
+        "wmv",
+        "mkv",
+        "flv",
+        "webm",
+        "m4v",
+        "mpeg",
+        "3gp",
+        "3g2",
+        "drc",
+        "rm",
+        "vob",
+        "ts",
+        "f4v",
+      ];
+
+      const rasterImageFormats = [
+        "jpg",
+        "jpeg",
+        "png",
+        "gif",
+        "bmp",
+        "tiff",
+        "tif",
+        "webp",
+        "heic",
+        "cr2",
+        "nef",
+        "arw",
+        "psd",
+      ];
+
+      const documentFormats = [
+        "csv",
+        "xlsx",
+        "xls",
+        "pdf",
+        "docx",
+        "doc",
+        "txt",
+        "html",
+        "json",
+      ];
+
+      const selectedFilePaths = node?.selectedFile?.split(",");
+      let containsVideos = false;
+      const fileExtentions = selectedFilePaths?.map((el) => {
+        const extension = el?.split(".")?.pop()?.toLowerCase();
+        if (rasterVideoFormats?.includes(extension)) {
+          containsVideos = true;
+        }
+        return extension;
+      });
+
+      function updateFileInput(colId) {
+        $.ajax({
+          type: "GET",
+          url: `${API_URI}/file/getAllFilesByCollectionId?id=${colId}`,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + tokenString,
+          },
+          success: function (data) {
+            const $selectFileContainer = $("#input-selectedFile");
+
+            const existingElement = $("#node-input-selectedFile");
+            if (existingElement.length > 0) {
+              existingElement
+                .prev("label[for='node-input-selectedFile']")
+                .remove();
+              existingElement.remove();
+            }
+
+            const $label = $(
+              '<label for="node-input-selectedFile">Select files:</label>'
+            );
+
+            const $newElement = $(
+              '<input id="node-input-selectedFile"></input>'
+            );
+            $selectFileContainer.append($label);
+            $selectFileContainer.append($newElement);
+
+            data = data.map((el) => ({
+              ...el,
+              path: el.path,
+            }));
+
+            if (data?.length) {
+              $("#input-selectedFile").show();
+              $("#input-selectedDataColl-info").hide();
+
+              const selectedFileLabel =
+                data.find((cl) => cl.path === node.selectedFile)?.fileName ||
+                "Select a file";
+
+              const finalData = data.filter((el) => {
+                const extension = el.path.split(".").pop().toLowerCase();
+                return (
+                  rasterVideoFormats.includes(extension) ||
+                  rasterImageFormats.includes(extension) ||
+                  documentFormats.includes(extension)
+                );
+              });
+
+              $newElement.val(node.selectedFile);
+
+              $newElement.typedInput({
+                types: [
+                  {
+                    value: "objects",
+                    multiple: "true",
+                    options: finalData.map((item) => {
+                      return { value: item.path, label: item.fileName };
+                    }),
+                  },
+                ],
+              });
+
+              $newElement.on("change", function () {
+                let newVal = $(this).val();
+                $newElement.val(newVal);
+                const selectedFilePaths = newVal?.split(",");
+                let containsVideos = false;
+                const fileExtentions = selectedFilePaths.map((el) => {
+                  const extension = el?.split(".").pop().toLowerCase();
+                  if (rasterVideoFormats.includes(extension)) {
+                    containsVideos = true;
+                  }
+                  return extension;
+                });
+                if (containsVideos) {
+                  $(
+                    "#input-Repeat, #input-frameRate, #video-setting-text"
+                  ).show();
+                } else {
+                  $(
+                    "#input-Repeat, #input-frameRate, #video-setting-text"
+                  ).hide();
+                }
+              });
+            } else {
+              $("#input-selectedFile, #input-Repeat").hide();
+              $("#input-selectedDataColl-info").show();
+            }
+          },
+          error: function (xhr, status, error) {
+            console.error(xhr, status, error);
+            $(
+              "#input-selectedFile, #input-Repeat",
+              "#input-selectedDataColl-info"
+            ).hide();
+          },
+        });
+      }
+
+      function updateDataCollectionInput() {
+        $.ajax({
+          type: "GET",
+          url: `${API_URI}/warehouse/get-data-collections/?organizationId=${organizationId}`,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + tokenString,
+          },
+          success: function (data) {
+            const $dataCollInput = $("#node-input-selectedDataColl");
+
+            $dataCollInput.empty();
+            if (data.data?.length) {
+              const selectedLabel =
+                data?.data?.find((cl) => cl.id === node.selectedDataColl)
+                  ?.name || "Select a data collection";
+
+              $dataCollInput.append(
+                `<option value="${node.selectedDataColl}">${selectedLabel}</option>`
+              );
+
+              data?.data?.forEach((cl) => {
+                if (cl.id !== node.selectedDataColl) {
+                  $dataCollInput.append(
+                    `<option value="${cl.id}">${cl.name}</option>`
+                  );
+                }
+              });
+
+              $dataCollInput.on("change", function () {
+                $(
+                  "#input-Repeat, #input-frameRate, #video-setting-text"
+                ).hide();
+
+                $dataCollInput.val($(this).val());
+                updateFileInput(this.value);
+              });
+            } else {
+              $("#input-Repeat").hide();
+            }
+          },
+          error: function (xhr, status, error) {
+            $(
+              "#video-input-selectedDataColl, #input-selectedFile, #input-Repeat"
+            ).hide();
+          },
+        });
+      }
+      function handleFormatChange(format) {
+        if (format === "rtsp") {
+          $("#input-rtsp, #input-frameRate").show();
+          $(
+            "#input-selectedDataColl, #input-selectedFile, #video-setting-text, #input-Repeat"
+          ).hide();
+        } else {
+          $("#input-rtsp").hide();
+          $("#input-selectedDataColl").show();
+          if (!selectedFilePaths) {
+            $("#input-frameRate").hide();
+          } else {
+            $("#input-frameRate").show();
+          }
+          updateFileInput(node.selectedDataColl);
+        }
+      }
+
+      updateDataCollectionInput();
+      handleFormatChange($("#node-input-format").val());
+
+      $("#node-input-format").on("change", function (event) {
+        handleFormatChange($(this).val());
+      });
+      if (containsVideos) {
+        $("#video-setting-text, #input-Repeat, #input-frameRate").show();
+      } else {
+        $("#video-setting-text, #input-Repeat, #input-frameRate").hide();
+      }
+    },
+  });
+</script>
+
+<script type="text/x-red" data-help-name="input">
+  <p>This node handles input from various sources, including RTSP streams and video files. It allows for the ingestion and processing of live or recorded video data, providing flexibility for different video processing workflows.</p>
+</script>
+
+<script type="text/html" data-template-name="input">
+  <div class="form-row">
+    <label for="node-input-name"> Name </label>
+    <input
+      type="text"
+      id="node-input-name"
+      data-i18n="Name"
+      placeholder="Name"
+    />
+  </div>
+
+  <div class="form-row">
+    <label for="node-input-format">Select source: </label>
+    <select id="node-input-format" style="width: 70%;">
+      <option value="rtsp" data-i18n="input.rtsp">RTSP</option>
+      <option value="videoFile" data-i18n="input.videoFile">
+        Data Collection
+      </option>
+    </select>
+  </div>
+
+  <div class="form-row" id="input-rtsp">
+    <label for="node-input-rtspUrl"> Rtsp url: </label>
+    <input type="text" id="node-input-rtspUrl" placeholder="Enter url" />
+  </div>
+
+  <div class="form-row" id="input-selectedDataColl">
+    <label for="node-input-selectedDataColl"> Select data collection: </label>
+    <!-- <input type="text" id="node-input-selectedDataColl" style="width: 70%;"> -->
+    <select id="node-input-selectedDataColl" style="width: 70%;"></select>
+    <div
+      class="form-tips"
+      id="input-selectedDataColl-info"
+      style="margin-top: 10px;"
+    >
+      No videos are available in the selected Data Collection
+    </div>
+  </div>
+
+  <div class="form-row" id="input-selectedFile">
+  </div>
+
+    <p id="video-setting-text">Video Settings:</p>
+    <div style="padding-left: 20px;" class="form-row" id="input-Repeat">
+      <label for="node-input-videoRepeat"> Repeat: </label>
+      <input
+        type="checkbox"
+        id="node-input-videoRepeat"
+        style="width: unset!important;"
+      />
+    </div>
+    <div style="padding-left: 20px;" class="form-row" id="input-frameRate">
+      <label for="node-input-frameRate">Frame (s) per second:</label>
+      <input
+        type="text"
+        id="node-input-frameRate"
+        placeholder="Type frame rate here..."
+      />
+    </div>
+  </div>
+</script>

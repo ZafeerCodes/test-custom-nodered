@@ -1,0 +1,595 @@
+<script type="text/javascript">
+  var fetchInterval;
+  RED.nodes.registerType("output", {
+    category: "custom",
+    color: "#cbcbcb",
+    defaults: {
+      name: { value: "output" },
+    },
+    inputs: 1,
+    // outputs: 1,
+    icon: "debug.svg",
+    // outputLabels: "Msg Forwording",
+    inputLabels: function () {
+      var lab = "";
+      var props = null;
+      if (!Array.isArray(props)) {
+        props = [
+          { p: "objectDetails", v: this.objectDetails, vt: "str" },
+          { p: "imageUrl", v: this.imageUrl, vt: "str" },
+          { p: "labels", v: this.labels, vt: "array" },
+          { p: "annotatedBuffer", v: this.annotatedBuffer, vt: "buffer" },
+          { p: "frameBuffer", v: this.frameBuffer, vt: "buffer" },
+          {
+            p: "showOutput",
+            v: "",
+            vt: "any (object: {key: value}, array: [str], array: [object])",
+          },
+        ];
+      }
+      if (props) {
+        for (var i = 0, l = props.length; i < l; i++) {
+          if (i > 0) lab += "\n";
+          if (i === 5) {
+            lab += "... +" + (props.length - 5);
+            break;
+          }
+          lab += props[i].p + ": ";
+
+          var propType =
+            props[i].p === "payload" ? this.payloadType : props[i].vt;
+          if (propType === "json") {
+            try {
+              var parsedProp = JSON.parse(
+                props[i].p === "payload" ? this.payload : props[i].v
+              );
+              propType = typeof parsedProp;
+              if (propType === "object" && Array.isArray(parsedProp)) {
+                propType = "Array";
+              }
+            } catch (e) {
+              propType = "invalid";
+            }
+          }
+          lab += propType;
+        }
+      }
+      return lab;
+    },
+    label: function () {
+      return this.name || "output";
+    },
+    oneditsave: function () {
+      clearInterval(fetchInterval);
+    },
+    oneditcancel: function () {
+      clearInterval(fetchInterval);
+    },
+    oneditdelete: function () {
+      clearInterval(fetchInterval);
+    },
+    oneditprepare: function () {
+      var node = this;
+
+      var $loader = $(".output-node-loader");
+      var $detailsSec = $(".detected-output-details");
+      var $heading = $(".outputnode-updated-output-head");
+      var $paragraph = $(".outputnode-updated-output-text");
+      var $image = $(".output-details img");
+      var $canvasSection = $(".output-canvas-section");
+      var $canvas = $("#output-canvas");
+      var ctx = $canvas[0].getContext("2d");
+      var $notFound = $(".output-node-not-found");
+      var $output_generic = $(".outputnode-output-generic");
+      var $imageaAnalysisSection = $(
+        "#output-node-image-analysis-image-retrieval-section"
+      );
+
+      $detailsSec.hide();
+      $(".output-details").hide();
+      $canvasSection.hide();
+      $notFound.hide();
+      $loader.show();
+      $output_generic.hide();
+      $imageaAnalysisSection.hide();
+
+      const location = window.location;
+
+      const RED_API_URI = `http://${location.hostname}:1880`;
+      const RED_WS_URI = `ws://${location.hostname}:1861/websocket?nodeid=${node.id}`;
+
+      const ws = new WebSocket(RED_WS_URI);
+
+      ws.onopen = () => {
+        console.log("Connected to the server");
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.event === `node_${node.id}`) {
+            let parsedData = data.payload;
+
+            if (parsedData) {
+              $loader.hide();
+              $notFound.hide();
+
+              if (parsedData?.objectDetails) {
+                displayDetailsOrLabels(parsedData?.objectDetails);
+              }
+
+              if (parsedData?.showOutput) {
+                $output_generic.show();
+                displayOutput(parsedData?.showOutput);
+              }
+
+              if (parsedData?.imageUrl) {
+                $image.attr("src", parsedData?.imageUrl);
+                $(".output-details").show();
+              }
+
+              if (parsedData?.labels) {
+                displayDetailsOrLabels(parsedData?.labels.join(", "));
+              }
+
+              if (parsedData?.annotatedBuffer) {
+                displayCanvas(parsedData?.annotatedBuffer);
+              } else if (parsedData?.frameBuffer) {
+                displayCanvas(parsedData?.frameBuffer);
+              }
+              if (parsedData?.outputFrame) {
+                displayCanvas(parsedData?.outputFrame);
+              } else if (parsedData?.inputFrame) {
+                displayCanvas(parsedData?.inputFrame);
+              }
+
+              // Carousel handler block for Azure Services Only (Temporary added)
+              // if (parsedData.displayOutputType === "carousel") {
+              //   $imageaAnalysisSection.hide();
+              //   displayCarousel(parsedData.type, parsedData.results);
+              // }
+            } else {
+              handleNotFound();
+            }
+          }
+        } catch (error) {
+          console.error("Error parsing message data:", error);
+          handleInvalidData();
+        }
+      };
+
+      ws.onerror = (error) => {
+        handleConnectionError();
+      };
+
+      ws.onclose = (event) => {
+        handleConnectionClosed();
+      };
+      function handleInvalidData() {
+        $loader.hide();
+        $notFound.show();
+        console.warn("Received invalid data format from server.");
+      }
+
+      function handleConnectionError() {
+        $loader.hide();
+        $notFound.show();
+        console.log(
+          "Failed to connect to the WebSocket server. Please try again later."
+        );
+      }
+
+      function handleConnectionClosed() {
+        $loader.hide();
+      }
+
+      /**
+       *
+       * Code commented for future usecase
+       *
+       * Start
+       *
+       **/
+      function fetchData() {
+        $.ajax({
+          url: `${RED_API_URI}/api/outputnode/data/${node.id}`,
+          method: "GET",
+          success: function (data) {
+            if (data?.data) {
+              $loader.hide();
+              $notFound.hide();
+
+              if (data?.data.displayOutputType === "carousel") {
+                $imageaAnalysisSection.hide();
+                displayCarousel(data?.data.type, data?.data.results);
+              }
+            } else {
+              handleNotFound();
+            }
+          },
+          error: function () {
+            handleNotFound();
+          },
+        });
+      }
+
+      fetchData();
+      // fetchInterval = setInterval(fetchData, 5000);
+
+      /**
+       *
+       * Code commented for future usecase
+       *
+       * End
+       *
+       **/
+
+      function handleNotFound() {
+        $loader.hide();
+        $notFound.show();
+      }
+
+      function displayDetailsOrLabels(text) {
+        $paragraph.text(text);
+        $detailsSec.show();
+      }
+
+      function isArray(value) {
+        return Array.isArray(value);
+      }
+
+      function isObject(value) {
+        return value && typeof value === "object" && !Array.isArray(value);
+      }
+
+      function displayOutput(showOutput) {
+        let htmlContent = "";
+
+        if (isArray(showOutput)) {
+          htmlContent = "<div>";
+          showOutput.forEach((item) => {
+            if (isObject(item)) {
+              htmlContent += '<div class="outputnode-output-object">';
+              Object.keys(item).forEach((key) => {
+                htmlContent += `
+                        <div class="outputnode-output-item">
+                            <strong>${key}:</strong> ${item[key]}
+                        </div>`;
+              });
+              htmlContent += "</div></p>";
+            } else {
+              htmlContent += `<p>${item}</p>`;
+            }
+          });
+          htmlContent += "</div>";
+        } else if (isObject(showOutput)) {
+          htmlContent = '<div class="outputnode-output-object">';
+          Object.keys(showOutput).forEach((key) => {
+            htmlContent += `
+                <div class="outputnode-output-item">
+                    <strong>${key}:</strong> ${showOutput[key]}
+                </div>`;
+          });
+          htmlContent += "</div>";
+        }
+
+        $output_generic.html(htmlContent);
+      }
+
+      // Display image buffer on canvas
+      function displayCanvas(imgBuffer) {
+        const byteArray = new Uint8Array(imgBuffer.data);
+        const blob = new Blob([byteArray], { type: "image/png" });
+        const img = new Image();
+        const url = URL.createObjectURL(blob);
+
+        img.onload = function () {
+          $canvas.attr("width", img.width);
+          $canvas.attr("height", img.height);
+          ctx.clearRect(0, 0, $canvas.width(), $canvas.height());
+          ctx.drawImage(img, 0, 0);
+          URL.revokeObjectURL(url);
+        };
+
+        img.onerror = function () {
+          console.error("Failed to load image from buffer");
+          handleNotFound();
+        };
+
+        img.src = url;
+        $canvasSection.show();
+      }
+
+      function convertBufferToImgUrl(imgBuffer) {
+        const byteArray = new Uint8Array(imgBuffer.data);
+        const blob = new Blob([byteArray], { type: "image/png" });
+        const img = new Image();
+        const url = URL.createObjectURL(blob);
+        return url;
+      }
+
+      function displayCarousel(type, results) {
+        console.log(results, "results")
+        let analysisData = {};
+        if (type === "generalAnalysis") {
+          analysisData = {
+            results:
+              results.map((el) => ({
+                ...el,
+                filePath: convertBufferToImgUrl(el.filePath),
+              })) || [],
+          };
+        } else if (type === "read") {
+          analysisData = {
+            results:
+              results.map((el) => ({
+                ...el,
+                filePath: convertBufferToImgUrl(el.filePath),
+              })) || [],
+          };
+        } else if (type === "imageRetrieval") {
+          analysisData = {
+            results:
+              results.map((el) => ({
+                ...el,
+                filePath: convertBufferToImgUrl(el.filePath),
+              })) || [],
+          };
+        }
+
+        const carouselSlides = document.getElementById("carouselSlides");
+        let currentSlide = 0;
+
+        function renderCarousel() {
+          carouselSlides.innerHTML = analysisData.results
+            .map(
+              (result, index) => `
+                
+                    <div class="carousel-slide" data-index="${index}">
+                    <!-- Image -->
+                    <img src="${result.filePath}" alt="Image Analysis" />
+
+                    <!-- Details -->
+                    <div class="carousel-details">
+                      <h3>Image Analysis</h3>
+                      ${
+                        type === "read"
+                          ? result.recognizedText
+                              .map((text) => `<p class="image-caption-text">${text}</p>`)
+                              .join("")
+                          : type === "generalAnalysis"
+                          ? `
+                              <p>${result.captionResult}</p>
+                              <div class="tags-container">
+                                ${result.tags
+                                  .map(
+                                    (tag) =>
+                                      `<span class="tag-badge">${tag.name} (${(
+                                        tag.confidence * 100
+                                      ).toFixed(2)}%)</span>`
+                                  )
+                                  .join("")}
+                              </div>
+                              <div class="dense-captions">
+                                ${result.denseCaptions
+                                  .map(
+                                    (caption) =>
+                                      `<p class="small">"${caption.text}" (${(
+                                        caption.confidence * 100
+                                      ).toFixed(2)}%)</p>`
+                                  )
+                                  .join("")}
+                              </div>
+                            `
+                          : type === "imageRetrieval"
+                          ? `<div class="dense-captions">${result.similarity}</div>`
+                          : ``
+                      }
+                    </div>
+                    </div>
+
+
+                `
+            )
+            .join("");
+
+          updateCarouselPosition();
+        }
+
+        function updateCarouselPosition() {
+          const slides = document.querySelectorAll(".carousel-slide");
+          carouselSlides.style.transform = `translateX(-${
+            currentSlide * 100
+          }%)`;
+        }
+
+        document.querySelector(".prev-slide").addEventListener("click", () => {
+          currentSlide =
+            currentSlide > 0
+              ? currentSlide - 1
+              : analysisData.results.length - 1;
+          updateCarouselPosition();
+        });
+
+        document.querySelector(".next-slide").addEventListener("click", () => {
+          currentSlide =
+            currentSlide < analysisData.results.length - 1
+              ? currentSlide + 1
+              : 0;
+          updateCarouselPosition();
+        });
+
+        renderCarousel();
+      }
+    },
+  });
+</script>
+
+<script type="text/html" data-help-name="output">
+  <p>
+    This node handles output data in various formats, including text, images,
+    and more. It is designed to be flexible, allowing for customized output
+    handling based on your needs.
+  </p>
+</script>
+
+<script type="text/html" data-template-name="output">
+  <style>
+    .image-analysis-carousel {
+      position: relative;
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+    .output-node-carousel-slides {
+      display: flex;
+      transition: transform 0.5s ease;
+    }
+    /* .carousel-slide {
+      flex: 0 0 100%;
+      position: relative;
+      width: 100%;
+      max-height: 450px;
+    }
+    .carousel-slide img {
+      width: 100%;
+      height: auto;
+    }
+    .carousel-details {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0, 0, 0, 0.432);
+      color: white;
+      max-height: 100%;
+      padding: 15px;
+      overflow: auto;
+    }
+    .carousel-controls {
+      display: flex;
+      justify-content: space-between;
+      position: absolute;
+      top: 50%;
+      width: 100%;
+      transform: translateY(-50%);
+    }
+    .carousel-control {
+      background: rgba(0, 0, 0, 0.5);
+      color: white;
+      border: none;
+      padding: 10px;
+      cursor: pointer;
+    }
+    .tags-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 10px;
+    }
+    .tag-badge {
+      background: #0e3e8a;
+      color: white;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 0.8em;
+    }
+    .image-caption-text {
+      font-size: 0.9em;
+    } */
+
+
+    .carousel-slide {
+  flex: 0 0 100%;
+  position: relative;
+  width: 100%;
+  /* max-height: 600px; */
+  display: flex;
+  flex-direction: column; /* Ensures the image and details are stacked vertically */
+}
+
+.carousel-slide img {
+  width: 100%;
+  height: auto;
+  display: block; /* Ensures the image takes up the full width */
+}
+
+.carousel-details {
+  background: rgba(0, 0, 0, 0.05); /* Optional: Light background for better contrast */
+  color: black; /* Change text color to black for readability */
+  padding: 15px;
+  overflow: auto;
+  margin-top: 10px; /* Adds space between the image and details */
+  font-size: 0.9em;
+}
+
+.tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.tag-badge {
+  background: #0e3e8a;
+  color: white;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 0.8em;
+}
+
+.image-caption-text {
+  font-size: 0.9em;
+}
+
+
+  </style>
+
+  <div class="form-row" id="output-node-name-changes">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name </label>
+    <input
+      type="text"
+      id="node-input-name"
+      data-i18n="Name"
+      placeholder="Name"
+    />
+  </div>
+
+  <div class="output-node-loader">
+    <p style="text-align: center; font-size: 16px; padding: 5px;">Loading...</p>
+  </div>
+
+  <div class="output-node-not-found">
+    <p style="text-align: center; font-size: 16px; padding: 5px;">
+      No contents found
+    </p>
+  </div>
+
+  <!-- <div class="detected-output-details">
+    <h4 class="outputnode-updated-output-head">Details</h4>
+    <p class="outputnode-updated-output-text"> </p>
+  </div> -->
+
+  <div class="outputnode-output-generic" style="margin: 5px;"></div>
+
+  <div class="output-details">
+    <h4>Output</h4>
+    <img src="" alt="Output" />
+  </div>
+
+  <div class="output-canvas-section">
+    <h4>Output</h4>
+    <canvas id="output-canvas" style="width: 100%; height: 100%;"></canvas>
+  </div>
+
+  <div class="output-node-image-analysis-image-retrieval-section">
+    <div class="image-analysis-carousel">
+      <div class="output-node-carousel-slides" id="carouselSlides"></div>
+      <div class="carousel-controls">
+        <button class="carousel-control prev-slide">←</button>
+        <button class="carousel-control next-slide">→</button>
+      </div>
+    </div>
+  </div>
+</script>

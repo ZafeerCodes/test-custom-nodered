@@ -1,0 +1,191 @@
+<!-- Node-red: Database Creation(PG) configs[start]  -->
+<script type="text/html" data-template-name="pgDatabaseCreationConfigs">
+    <!-- <div class="form-row" style="min-width: 500px;">
+      <label for="node-config-input-name"><i class="fa fa-tag"></i> Name </label>
+      <input type="text" id="node-config-input-name" data-i18n="Name" placeholder="Name">
+    </div> -->
+  
+    <div class="form-row" style="min-width: 500px; display: flex;">
+      <label for="node-config-input-database"><i class="fa fa-database"></i> Database name </label>
+      <div style="position: relative; width: 70%; margin-left: 3px;">
+        <input type="text" id="node-config-input-database" placeholder="Database name" autocomplete="off" style="padding-right: 30px; width: 100%;">
+        <i class="fa fa-caret-down" style="position: absolute; right: 8px; top: 10px; color: #888;"></i>
+      </div>
+    </div>
+  
+  
+  </script>
+<script type="text/javascript">
+    (function () {
+
+        var API_URI = `http://${window.location.hostname}:4500`;
+        var auth_token = localStorage.getItem("percepto-user");
+        var INFLUX_URI = `http://${window.location.hostname}:8086`;
+
+        let configs = {};
+
+        let isCreateNewDatabase = false;
+        let isDatabseEditable = false;
+
+        function createDatabase(payload) {
+            const pgUrl = `${API_URI}/postgresql/create-database`;
+
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    url: pgUrl,
+                    method: 'POST',
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + auth_token,
+                    },
+                    data: JSON.stringify({
+                        ...payload
+                    }),
+                    success: function (data) {
+                        resolve(data);
+                    },
+                    error: function (error) {
+                        console.error('Failed to fetch data:', error);
+                        reject(error);
+                    }
+                });
+            });
+        }
+
+        function getDbLists(payload) {
+            const pgUrl = `${API_URI}/postgresql/databases`;
+
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    url: pgUrl,
+                    method: 'POST',
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + auth_token,
+                    },
+                    data: JSON.stringify({
+                        ...payload
+                    }),
+                    success: function (data) {
+                        resolve(data);
+                    },
+                    error: function (error) {
+                        console.error('Failed to fetch data:', error);
+                        reject(error);
+                    }
+                });
+            });
+        }
+
+        RED.nodes.registerType('pgDatabaseCreationConfigs', {
+            category: 'config',
+            color: '#a6bbcf',
+            defaults: {
+                name: { value: "" },
+                database: { value: "", required: false },
+            },
+            inputs: 1,
+            outputs: 1,
+            icon: "database.png",
+            label: function () {
+                return this.name || this.database;
+            },
+            oneditprepare: async function () {
+                const configNode = RED.nodes.getType("pgDatabaseCreationConfigs");
+                const dbConfigs = configNode?.defaults?.dbConfigs;
+                if (!dbConfigs) {
+                    RED.notify("Missing configs!", "error");
+                }
+
+                configs = dbConfigs || {};
+
+                let dbLists = await getDbLists(configs) || [];
+
+                $("#node-config-input-database").autocomplete({
+                    source: function (request, response) {
+                        let matches = [];
+                        const searchTerm = request.term.toLowerCase();
+
+                        dbLists.forEach(v => {
+                            const i = v.toLowerCase().indexOf(searchTerm);
+                            if (i > -1) {
+                                matches.push({
+                                    value: v,
+                                    label: v,
+                                    i: i
+                                });
+                            }
+                        });
+
+                        if (matches.length === 0) {
+                            matches.push({
+                                value: `${request.term}`,
+                                label: `Create "${request.term}"`,
+                                isCreateOption: true
+                            });
+                        }
+
+                        matches.sort((A, B) => A.i - B.i);
+
+                        response(matches);
+                    },
+                    minLength: 1,
+                    select: async function (event, ui) {
+                        const item = ui.item;
+                        if (item.isCreateOption) {
+                            const newDb = item.value.replace('Create "', '').replace('"', '');
+                            dbLists.push(newDb);
+                            $("#node-config-input-database").val(newDb);
+                            isCreateNewDatabase = true;
+                            isDatabseEditable = true;
+
+                        } else {
+                            $("#node-config-input-database").val(item.value);
+                            isCreateNewDatabase = false;
+                            isDatabseEditable = false;
+                        }
+                    },
+                    focus: function (event, ui) {
+                        return false;
+                    },
+                    open: function () {
+                        $(this).autocomplete("widget").css({
+                            "max-height": "200px",
+                            "overflow-y": "auto"
+                        });
+                    }
+                });
+                $("#node-config-input-database").on("focus", function () {
+                    $(this).autocomplete("search", "");
+                });
+            },
+
+            oneditsave: async function () {
+                this.database = $("#node-config-input-database").val();
+
+                const payload = {
+                    name: this.database,
+                    configs: { ...configs }
+                };
+
+                if (isCreateNewDatabase) {
+                    await createDatabase(payload).then((res) => {
+                        RED.notify(
+                            `${res}`,
+                            "success",
+                        );
+                    }).catch((err) => {
+                        RED.notify(
+                            `${err.statusText}`,
+                            "error",
+                        );
+                    });
+
+                }
+                isCreateNewDatabase = false;
+                isDatabseEditable = false;
+            }
+        });
+    })();
+</script>
+<!-- Node-red: Database Creation(PG) configs[end]  -->

@@ -1,0 +1,150 @@
+<script>
+
+function configureModalHtml(type, tableName) {
+        if (type === "influxdb") {
+          return `
+            <div class="form-row red-ui-dialog">
+              <div id="node-input-add-column-container" class="red-ui-form-row" style="display: flex; flex-direction: row; justify-content: space-between;">
+                <span>InfluxDB ${tableName || "measurement"}'s fields configuration</span>
+                <button id="node-input-add-column" class="red-ui-button red-ui-button-small"><i class="fa fa-plus"></i> Add Field</button>
+              </div>
+              <div id="node-input-columns-container" class="red-ui-form-row"></div>
+            </div>
+          `;
+        } else if (type === "postgresql") {
+          return `
+            <div class="form-row red-ui-dialog">
+               <div id="node-input-add-column-container" class="red-ui-form-row" style="display: flex; flex-direction: row; justify-content: space-between;">
+                <span>PostgreSQL ${tableName || "table"}'s columns configuration</span>
+                <button id="node-input-add-column" class="red-ui-button red-ui-button-small"><i class="fa fa-plus"></i> Add Column</button>
+              </div>
+              <div id="node-input-columns-container" class="red-ui-form-row"></div>
+            </div>
+          `;
+        }
+      }
+
+/**
+* Modal configuration [start]
+* */
+function addColumnsAndFieldsModalConfiguration(databaseType) {
+ $(document).ready(function () {
+   const dialogId = "row-form-red-ui-dialog";
+   let dialogContent = $(`#${dialogId}`);
+
+   if (dialogContent.length === 0) {
+     dialogContent = $('<div>', { id: dialogId, class: "custom-dialog", style: "display: none;" });
+     $("#container-table-payload-tables-main").append(dialogContent);
+     dialogContent.dialog({
+       modal: true,
+       autoOpen: false,
+       minWidth: 500,
+       resizable: false,
+       classes: {
+         "ui-dialog": "node-red-dialog"
+       },
+       buttons: [
+         {
+           text: "Done",
+           click: function () {
+             console.log("Saving column configuration...");
+
+             const columns = [];
+             $("#node-input-columns-container .column-row").each(function () {
+               const name = $(this).find(".node-input-key-name").val();
+               const type = $(this).find(".node-input-key-type").val();
+               if (name && type) {
+                 columns.push({ name, type });
+               }
+             });
+             let configs = getBaseerBuilderConfigs("influxDb");
+             if (columns.length > 0) {
+               console.log("Configured Columns:", columns);
+
+               let payload = { measurementName: "mark_two", keys: columns };
+               createMeasurment(payload, configs).then((res) => {
+                 RED.notify("Measurement created successfully!", "success");
+               }).catch((err) => {
+                 RED.notify("Error in creating measurement!" + err?.message, "error");
+               });
+               RED.notify("Column configuration saved successfully!", "success");
+             } else {
+               RED.notify("No columns to save.", "warning");
+             }
+             $(this).dialog("close");
+           }
+         },
+         {
+           text: "Close",
+           click: function () {
+             $(this).dialog("close");
+           }
+         }
+       ]
+     });
+   }
+   dialogContent.dialog("option", "title", databaseType === "influxdb" ? "Add Influx Fields" : "Add PostgreSQL Columns");
+   dialogContent.html(configureModalHtml(databaseType));
+   $("#container-table-open-modal-btn").off("click").on("click", async function () {
+     dialogContent.dialog("open");
+     if (databaseType === "postgresql") {
+       try {
+         let configs = getBaseerBuilderConfigs("postgreDb");
+         const payload = {
+           query: `SELECT column_name, data_type, is_nullable 
+                   FROM information_schema.columns 
+                   WHERE table_schema = 'public' AND table_name = $1`,
+           configs: configs,
+           params: [configs.table]
+         };
+         let tableLists = await getTableLists(configs) || [];
+         const fetchedTableInfo = await getTableDetails("postgreDb", payload);
+         const columnsToUse = fetchedTableInfo && fetchedTableInfo.length > 0
+           ? fetchedTableInfo?.map(column => ({
+             name: column.column_name,
+             type: column.data_type,
+             isPrimary: false,
+             isForeign: false,
+             referencesTable: '',
+             referencesColumn: '',
+             isNullable: column.is_nullable === 'YES'
+           }))
+           : [];
+
+         initializePostgresColumns($("#node-input-columns-container"), columnsToUse, tableLists, configs);
+       } catch (error) {
+         console.error("Error fetching table details:", error);
+       }
+
+     } else if (databaseType === "influxdb") {
+       let configs = getBaseerBuilderConfigs("influxDb");
+       let fields = await getTableDetails("influxDb", {}, configs);
+       initializeInfluxColumns($("#node-input-columns-container"), [...classifyInfluxMeasurmentKeysTags(fields)] || []);
+     }
+   });
+ });
+}
+async function initializePostgresColumns(container, columns, tableLists, configs) {
+ container.empty();
+ columns.forEach(column => createColumnRow(column, tableLists, container, configs));
+ addColumnButtonHandler(container, createColumnRow);
+}
+
+function initializeInfluxColumns(container, columns) {
+ container.empty();
+ columns.forEach(column => createInfluxColumnRow(container, column));
+ addColumnButtonHandler(container, createInfluxColumnRow);
+}
+
+function addColumnButtonHandler(container, createRowFunction) {
+ $("#node-input-add-column").off("click").on("click", () => {
+   createRowFunction(container);
+ });
+}
+
+/**
+* 
+* Modal configuration [end]
+* 
+* */
+</script>

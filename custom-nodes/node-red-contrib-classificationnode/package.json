@@ -1,0 +1,19 @@
+{
+  "name": "node-red-contrib-classificationnode",
+  "version": "0.0.1",
+  "description": "Node to create custom function in Javascript and python",
+  "dependencies": {
+    "sharp": "^0.32.1",
+    "text2png": "^2.3.0",
+    "python-integration-helper": "file:../../packages/local_modules/python-integration-helper"
+  },
+  "keywords": [
+    "node-red",
+    "classification"
+  ],
+  "node-red": {
+    "nodes": {
+      "sample": "classificationNode/classificationNode.js"
+    }
+  }
+}

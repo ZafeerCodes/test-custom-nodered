@@ -1,0 +1,18 @@
+{
+  "name": "red-contrib-facerecognitionnode",
+  "version": "1.0.0",
+  "description": "Node to recognise faces",
+  "dependencies": {
+    "python-integration-helper": "file:../../packages/local_modules/python-integration-helper"
+  },
+  "keywords": [
+    "node-red",
+    "face",
+    "recognition"
+  ],
+  "node-red": {
+    "nodes": {
+      "sample": "faceRecognitionNode/faceRecognitionNode.js"
+    }
+  }
+}

@@ -1,0 +1,252 @@
+<script type="text/javascript">
+    RED.nodes.registerType('face-recognition-node', {
+        category: 'custom',
+        color: "#cbcbcb",
+        defaults: {
+            name: { value: "" },
+            detectionModel: { value: "yolo-v8-face" },
+            recognitionModel: { value: "" },
+            detectionThreshold: { value: 0.5 },
+            recognitionThreshold: { value: 0.5 },
+            dataSet: { value: "" },
+            outputProperties: {
+                value: [
+                    {
+                        key: "people",
+                        type: "array_str"
+                    },
+                    {
+                        key: "timeStamp",
+                        type: "string"
+                    }
+                ]
+            }
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: "file.png",
+        label: function () { return this.name || "Face Recognition Node"; },
+        inputLabels: function () {
+            var lab = "";
+            var props = null;
+            if (!Array.isArray(props)) {
+                props = [
+                    { p: "frameBuffer", v: this.imagePath, vt: "string" },
+                ];
+            }
+            if (props) {
+                for (var i = 0, l = props.length; i < l; i++) {
+                    if (i > 0) lab += "\n";
+                    if (i === 5) {
+                        lab += "... +" + (props.length - 5);
+                        break;
+                    }
+                    lab += props[i].p + ": ";
+
+                    var propType = props[i].p === "payload" ? this.payloadType : props[i].vt;
+                    if (propType === "json") {
+                        try {
+                            var parsedProp = JSON.parse(
+                                props[i].p === "payload" ? this.payload : props[i].v
+                            );
+                            propType = typeof parsedProp;
+                            if (propType === "object" && Array.isArray(parsedProp)) {
+                                propType = "Array";
+                            }
+                        } catch (e) {
+                            propType = "invalid";
+                        }
+                    }
+                    lab += propType
+                }
+            }
+            return lab;
+        },
+        outputLabels: function () {
+            var lab = "";
+            var props = null;
+            if (!Array.isArray(props)) {
+                props = [
+                    { p: "annotatedBuffer", v: this.objectDetails, vt: "string" },
+                    { p: "people", v: this.objectDetails, vt: "string[]" },
+                    { p: "timeStamp", v: this.objectDetails, vt: "timeStamp[]" },
+                ];
+            }
+            if (props) {
+                for (var i = 0, l = props.length; i < l; i++) {
+                    if (i > 0) lab += "\n";
+                    if (i === 5) {
+                        lab += "... +" + (props.length - 5);
+                        break;
+                    }
+                    lab += props[i].p + ": ";
+
+                    var propType = props[i].p === "payload" ? this.payloadType : props[i].vt;
+                    if (propType === "json") {
+                        try {
+                            var parsedProp = JSON.parse(
+                                props[i].p === "payload" ? this.payload : props[i].v
+                            );
+                            propType = typeof parsedProp;
+                            if (propType === "object" && Array.isArray(parsedProp)) {
+                                propType = "Array";
+                            }
+                        } catch (e) {
+                            propType = "invalid";
+                        }
+                    }
+                    lab += propType
+                }
+            }
+            console.log(typeof lab, "chekc");
+            return lab;
+        },
+
+        oneditsave: function () {
+            var node = this;
+            var dataSet = $("#node-input-dataSet").val() || "";
+            var recognitionModel = $("#node-input-recognitionModel").val();
+
+            if (dataSet !== node.dataSet) {
+                node.dataSet = dataSet;
+                node.recognitionModel = recognitionModel;
+                RED.nodes.node(node.id).changed = true;
+                RED.nodes.dirty(true);
+            }
+        },
+
+        oneditprepare: function () {
+            var node = this;
+            const tokenString = localStorage.getItem("percepto-user");
+            const organizationId = localStorage.getItem("organizationId");
+            const API_URI = `http://${location.hostname}:4500`;
+
+
+            let selectedDataSet = null;
+
+            function updateFaceRecognitionModel(dataSetString) {
+                $.ajax({
+                    type: "GET",
+                    url: `${API_URI}/warehouse/get-data-collections/?organizationId=${organizationId}`,
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + tokenString
+                    },
+                    success: function (data) {
+                        const $recognitionModelInput = $("#node-input-recognitionModel");
+                        $recognitionModelInput.empty();
+
+                        const faceRegistrationCollections = data.data?.filter(collection => collection.type === "Face Registration");
+                    
+                        if (faceRegistrationCollections && faceRegistrationCollections.length) {
+                            const selectedLabel = faceRegistrationCollections.find(cl => cl.name === dataSetString ?? node.dataSet)?.embedingModel ||
+                                "Select a face registration collection";
+                            $recognitionModelInput.append(`<option value="${selectedLabel}">${selectedLabel}</option>`);
+                        } else {
+                            $recognitionModelInput.append('<option value="">No Model Available</option>');
+                        }
+                    },
+                    error: function (xhr, status, error) {
+                        console.error('Error fetching face registration collections:', error);
+                        $("#node-input-recognitionModel").append(
+                            '<option value="">Default</option>'
+                        );
+                    }
+                });
+            }
+
+            function updateDataCollectionInput() {
+                $.ajax({
+                    type: "GET",
+                    url: `${API_URI}/warehouse/get-data-collections/?organizationId=${organizationId}`,
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + tokenString
+                    },
+                    success: function (data) {
+                        const $dataSetInput = $("#node-input-dataSet");
+                        $dataSetInput.empty();
+
+                        const faceRegistrationCollections = data.data?.filter(collection => collection.type === "Face Registration");
+
+                        if (faceRegistrationCollections?.length) {
+                            const selectedLabel = faceRegistrationCollections.find(cl => cl.name === node.dataSet)?.name ||
+                                "Select a face registration collection";
+                            $dataSetInput.append(`<option value="${node.dataSet}">${selectedLabel}</option>`);
+                            faceRegistrationCollections.forEach(cl => {
+                                if (cl.name !== node.dataSet) {
+                                    $dataSetInput.append(`<option value="${cl.name}">${cl.name}</option>`);
+                                }
+                            });
+                        } else {
+                            $dataSetInput.append('<option value="">No face registration collections available</option>');
+                        }
+                    },
+                    error: function (xhr, status, error) {
+                        console.error('Error fetching face registration collections:', error);
+                        $("#node-input-dataSet").append('<option value="">Default</option>');
+                    }
+                });
+            }
+
+
+            updateDataCollectionInput();
+            // updateFaceRecognitionModel();
+
+            $("#node-input-dataSet").on("change", function () {
+                updateFaceRecognitionModel($(this).val() || node.dataSet);
+            });
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="face-recognition-node">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name" >
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-dataSet">Collection:</label>
+        <select id="node-input-dataSet" style="width: 70%;">
+            <option value="">Select a data collection</option>
+        </select>
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-detectionModel">Detection Model:</label>
+        <select id="node-input-detectionModel" style="width: 70%;">
+            <option value="yolo-v8-face">YOLO v8 Face Detection</option>
+            <option value="mtcnn">MTCNN</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-recognitionModel">Recognition Model:</label>
+        <select id="node-input-recognitionModel" style="width: 70%;" disabled="true">
+            <option value="facenet">FaceNet</option>
+        </select>
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-detectionThreshold">Detection Threshold:</label>
+        <input type="number" id="node-input-detectionThreshold" 
+               placeholder="Detection confidence threshold" 
+               value="0.25" step="0.01" min="0" max="1">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-recognitionThreshold">Recognition Threshold:</label>
+        <input type="number" id="node-input-recognitionThreshold" 
+               placeholder="Recognition confidence threshold" 
+               value="0.5" step="0.01" min="0" max="1">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="face-recognition-node">
+    <p>This node performs face detection and recognition using configurable models:</p>
+    <ul>
+        <li>Face Detection Models: YOLO v8 Face and MTCNN</li>
+        <li>Face Recognition Models: FaceNet and ArcFace</li>
+    </ul>
+    <p>Configure detection and recognition thresholds separately for better control over the pipeline.</p>
+</script>

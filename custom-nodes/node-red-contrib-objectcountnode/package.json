@@ -1,0 +1,19 @@
+{
+    "name": "node-red-contrib-objectcountnode",
+    "version": "0.0.1",
+    "description": "Object Count Node for specific use case.",
+    "dependencies": {
+        "python-integration-helper": "file:../../packages/local_modules/python-integration-helper"
+    },
+    "keywords": [
+        "node-red",
+        "object",
+        "object-counting",
+        "object count"
+    ],
+    "node-red": {
+        "nodes": {
+            "sample": "objectCountNode/objectCountNode.js"
+        }
+    }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "python-integration-helper",
+  "version": "1.0.0",
+  "main": "PythonIntegrationHelperClass.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Helper Package created to facilitiate spawn usage of Computer vision python scripts"
+}

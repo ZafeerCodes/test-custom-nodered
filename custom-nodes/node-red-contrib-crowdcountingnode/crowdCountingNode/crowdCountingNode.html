@@ -1,0 +1,131 @@
+<script type="text/javascript">
+  RED.nodes.registerType('crowd counting', {
+    category: 'custom',
+    color: "#cbcbcb",
+    defaults: {
+      name: { value: "crowd counting" },
+      model: { value: "SFANET" },
+      fontSize: { value: "12" },
+      fontColor: { value: "#FFFFFF" },
+      fontScale: { value: "1" },
+      fontThickness: { value: "2" }
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "font-awesome/fa-object-ungroup",
+    inputLabels: function () {
+      var lab = "";
+      var props = null;
+      if (!Array.isArray(props)) {
+        props = [
+          { p: "frameBuffer", v: this.imagePath, vt: "string" },
+        ];
+      }
+      if (props) {
+        for (var i = 0, l = props.length; i < l; i++) {
+          if (i > 0) lab += "\n";
+          if (i === 5) {
+            lab += "... +" + (props.length - 5);
+            break;
+          }
+          lab += props[i].p + ": ";
+
+          var propType = props[i].p === "payload" ? this.payloadType : props[i].vt;
+          if (propType === "json") {
+            try {
+              var parsedProp = JSON.parse(
+                props[i].p === "payload" ? this.payload : props[i].v
+              );
+              propType = typeof parsedProp;
+              if (propType === "object" && Array.isArray(parsedProp)) {
+                propType = "Array";
+              }
+            } catch (e) {
+              propType = "invalid";
+            }
+          }
+          lab += propType
+        }
+      }
+      return lab;
+    },
+    outputLabels: function () {
+      var lab = "";
+      var props = null;
+      if (!Array.isArray(props)) {
+        props = [
+          { p: "annotatedBuffer", v: this.objectDetails, vt: "string" },
+        ];
+      }
+      if (props) {
+        for (var i = 0, l = props.length; i < l; i++) {
+          if (i > 0) lab += "\n";
+          if (i === 5) {
+            lab += "... +" + (props.length - 5);
+            break;
+          }
+          lab += props[i].p + ": ";
+
+          var propType = props[i].p === "payload" ? this.payloadType : props[i].vt;
+          if (propType === "json") {
+            try {
+              var parsedProp = JSON.parse(
+                props[i].p === "payload" ? this.payload : props[i].v
+              );
+              propType = typeof parsedProp;
+              if (propType === "object" && Array.isArray(parsedProp)) {
+                propType = "Array";
+              }
+            } catch (e) {
+              propType = "invalid";
+            }
+          }
+          lab += propType
+        }
+      }
+      console.log(typeof lab, "chekc");
+      return lab;
+    },
+    label: function () {
+      return this.name || "crowd counting";
+    },
+  });
+</script>
+
+<script type="text/html" data-help-name="crowd counting">
+    <p>This node will take input data as a frame buffer and perform crowd counting, giving output as an annotated frame buffer.</p>
+</script>
+
+<script type="text/html" data-template-name="crowd counting">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i>Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-model">Model:</label>
+        <select id="node-input-model" style="width: 70%; min-width: 70%; max-width: 70%;">
+            <option value="SFANET">SFANET</option>
+        </select>
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-fontSize">Font Size:</label>
+        <input type="number" id="node-input-fontSize" placeholder="Font Size">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-fontColor">Font Color:</label>
+        <input type="color" id="node-input-fontColor" placeholder="Font Color">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-fontScale">Font Scale:</label>
+        <input type="number" id="node-input-fontScale" placeholder="Font Scale" step="any">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-fontThickness">Font Thickness:</label>
+        <input type="number" id="node-input-fontThickness" placeholder="Font Thickness">
+    </div>
+</script>

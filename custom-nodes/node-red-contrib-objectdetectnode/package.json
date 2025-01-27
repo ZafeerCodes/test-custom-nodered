@@ -1,0 +1,16 @@
+{
+  "name": "node-red-contrib-objectdetectnode",
+  "version": "0.0.1",
+  "description": "The simplest of simple nodes",
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "keywords": [
+    "node-red"
+  ],
+  "node-red": {
+    "nodes": {
+      "sample": "objectDetectNode/objectDetectNode.js"
+    }
+  }
+}

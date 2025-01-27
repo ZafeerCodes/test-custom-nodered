@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic HTML Loader</title>
+</head>
+
+<body>
+    <h4>Sample Text</h4>
+    <div id="main-sample"></div>
+</body>
+
+<script>
+    // Global object for shared variables and functions
+    window.shared = {
+        mainVar: "Main Variable",
+        mainFunction: function (args) {
+            console.log("Function from Main HTML", args);
+        },
+    };
+
+    // Dynamically load and execute content from external HTML files
+    const files = ["influx.html"];
+    const container = document.getElementById("main-sample");
+
+    files.forEach((file) => {
+        fetch(file)
+            .then((response) => response.text())
+            .then((data) => {
+                const div = document.createElement("div");
+                div.innerHTML = data;
+
+                // Append the HTML content
+                container.appendChild(div);
+
+                // Execute any <script> tags in the fetched content
+                const scripts = div.querySelectorAll("script");
+                scripts.forEach((script) => {
+                    const newScript = document.createElement("script");
+                    if (script.src) {
+                        // If the script is external
+                        newScript.src = script.src;
+                        newScript.async = false;
+                    } else {
+                        // If the script is inline
+                        newScript.textContent = script.textContent;
+                    }
+                    document.body.appendChild(newScript);
+                });
+            })
+            .catch((err) => console.error(`Error loading ${file}:`, err));
+    });
+</script>
+</html>
