@@ -14,6 +14,7 @@ pipeline {
         IMAGE_NAME = "zafeeruddin/custom-node-red"  
         IMAGE_TAG = "${IMAGE_NAME}:${env.BUILD_NUMBER}"  
         GITHUB_TOKEN = credentials("github-zafeercodes")
+        DOCKER_CREDENTIALS_PSW = credentials('DOCKER_CREDENTIALS_PSW') // Replace with the actual ID of your Docker credentials
     }
 
     stages {
