@@ -17,20 +17,10 @@ pipeline {
     }
 
     stages {
-        stage("Checkout") {
+        stage('Checkout Code') {
             steps {
-                script {
-                    withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                        echo "Using GitHub Token: ${GITHUB_TOKEN}"
-                        
-                        sh """
-                          
-                            
-                            git clone https://zafeeruddin:${GITHUB_TOKEN}@github.com/ZafeerCodes/test-custom-nodered
-                            cd test-custom-nodered
-                        """
-                    }
-                }
+                echo "Checking out the source code..."
+                checkout scm
             }
         }
 
