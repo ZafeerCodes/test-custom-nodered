@@ -24,6 +24,7 @@ pipeline {
                         echo "Token got is ........${GITHUB_TOKEN}"
                         
                         sh """
+                            rm -rf test-custom-nodered/* 
                             git clone https://zafeeruddin:${GITHUB_TOKEN}@github.com/ZafeerCodes/test-custom-nodered
                             cd test-custom-nodered                         """
                     }
