@@ -21,16 +21,22 @@ pipeline {
             steps {
                 script {
                     withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                        echo "Token got is ........${GITHUB_TOKEN}"
+                        echo "Using GitHub Token: ${GITHUB_TOKEN}"
                         
                         sh """
-                            rm -rf test-custom-nodered/* 
+                            # Ensure the directory exists or clean it up properly
+                            if [ -d "test-custom-nodered" ]; then
+                                rm -rf test-custom-nodered
+                            fi
+                            
                             git clone https://zafeeruddin:${GITHUB_TOKEN}@github.com/ZafeerCodes/test-custom-nodered
-                            cd test-custom-nodered                         """
+                            cd test-custom-nodered
+                        """
                     }
                 }
             }
         }
+
 
         stage("Docker Build and Push") {
             steps {
