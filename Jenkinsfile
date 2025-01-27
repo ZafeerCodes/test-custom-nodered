@@ -25,7 +25,7 @@ pipeline {
                         
                         sh """
                             git clone https://zafeeruddin:${GITHUB_TOKEN}@github.com/ZafeerCodes/test-custom-nodered
-                            cd percepto-node-red                         """
+                            cd test-custom-nodered                         """
                     }
                 }
             }
