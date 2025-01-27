@@ -24,10 +24,7 @@ pipeline {
                         echo "Using GitHub Token: ${GITHUB_TOKEN}"
                         
                         sh """
-                            # Ensure the directory exists or clean it up properly
-                            if [ -d "test-custom-nodered" ]; then
-                                rm -rf test-custom-nodered
-                            fi
+                          
                             
                             git clone https://zafeeruddin:${GITHUB_TOKEN}@github.com/ZafeerCodes/test-custom-nodered
                             cd test-custom-nodered
