@@ -88,7 +88,7 @@ describe('cookbook', function () {
 
             debugTab.open();
             injectNode.clickLeftButton();
-            debugTab.getMessage().should.containEql('<title>Masterworks again sudo</title>');
+            debugTab.getMessage().should.containEql('<title>Masterworks again will</title>');
         });
 
         it('set the URL of a request using a template', function () {
