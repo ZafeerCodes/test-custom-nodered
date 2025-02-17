@@ -40,7 +40,7 @@ pipeline {
                 script {
                     withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
                         sh """
-                            kubectl delete -l app=nodered  --kubeconfig=$KUBECONFIG
+                            kubectl delete po -l app=nodered  --kubeconfig=$KUBECONFIG
                         """
                     }
                 }
