@@ -38,7 +38,7 @@ pipeline {
             steps {
                 echo 'Redeploying application on Kubernetes...'
                 script {
-                    withCredentials([file(credentialsId: 'kconfig', variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
                         sh """
                             kubectl delete -l app=nodered  --kubeconfig=$KUBECONFIG
                         """
