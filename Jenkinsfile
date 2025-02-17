@@ -40,9 +40,7 @@ pipeline {
                 script {
                     withCredentials([file(credentialsId: 'kconfig', variable: 'KUBECONFIG')]) {
                         sh """
-                            kubectl delete -l app=nodered 
-                            // kubectl set image deployment/nodered-deployment nodered=${IMAGE_TAG} --kubeconfig=$KUBECONFIG -n jenkins
-                            // kubectl rollout status deployment/nodered-deployment --kubeconfig=$KUBECONFIG -n jenkins
+                            kubectl delete -l app=nodered  --kubeconfig=$KUBECONFIG
                         """
                     }
                 }
